@@ -1,51 +1,319 @@
+# ============================================================================
+# CodeCheck Docker Compose Configuration
+# ============================================================================
+# This configuration defines the multi-container setup for CodeCheck API.
+#
+# Services:
+# - postgres: PostGIS-enabled PostgreSQL database
+# - api: FastAPI application server
+# - redis: Redis cache for session management and rate limiting
+#
+# Security Notes:
+# - All secrets are loaded from environment variables
+# - Create a .env file in the same directory (use .env.example as template)
+# - Never commit .env files with real credentials to version control
+# ============================================================================
+
 version: '3.8'
 
 services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL Database with PostGIS Extension
+  # --------------------------------------------------------------------------
   postgres:
     image: postgis/postgis:15-3.3
-    environment:
-      POSTGRES_DB: codecheck
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    container_name: codecheck_postgres
+    restart: unless-stopped
 
-  api:
-    build: ./api
-    ports:
-      - "8000:8000"
     environment:
+      # Database configuration from environment variables
+      POSTGRES_DB: ${DB_NAME:-codecheck}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password must be set in .env file}
+
+      # PostgreSQL performance tuning (optional)
+      POSTGRES_SHARED_BUFFERS: ${POSTGRES_SHARED_BUFFERS:-256MB}
+      POSTGRES_MAX_CONNECTIONS: ${POSTGRES_MAX_CONNECTIONS:-100}
+
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+    volumes:
+      # Persistent database storage
+      - postgres_data:/var/lib/postgresql/data
+
+      # Initialize database schema on first run
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+      # Custom PostgreSQL configuration (optional)
+      # - ./database/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-codecheck}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Security: Run as non-root user (postgres user is default)
+    # Security: Limit resources to prevent DoS
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Network isolation
+    networks:
+      - codecheck_network
+
+  # --------------------------------------------------------------------------
+  # FastAPI Application Server
+  # --------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        # Pass build arguments if needed
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+
+    container_name: codecheck_api
+    restart: unless-stopped
+
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    environment:
+      # Database connection
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: password
-      DB_NAME: codecheck
-      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
-      REDIS_URL: redis://redis:6379
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password must be set in .env file}
+      DB_NAME: ${DB_NAME:-codecheck}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-codecheck}
+
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key must be set in .env file}
+      SESSION_SECRET: ${SESSION_SECRET:-${JWT_SECRET_KEY}}
+
+      # Anthropic Claude API
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:?Claude API key must be set in .env file}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-3-5-sonnet-20241022}
+      CLAUDE_MAX_TOKENS: ${CLAUDE_MAX_TOKENS:-4096}
+
+      # Redis connection
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+
+      # Application settings
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # CORS configuration
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+
+      # Rate limiting
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+
+      # Feature flags
+      FEATURE_AUTH_ENABLED: ${FEATURE_AUTH_ENABLED:-true}
+      FEATURE_AI_EXPLANATIONS: ${FEATURE_AI_EXPLANATIONS:-true}
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
-    volumes:
-      - ./api:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+        condition: service_healthy
 
+    volumes:
+      # Mount source code for hot-reload in development
+      # Comment out in production or use read-only mount
+      - ./api:/app:${VOLUME_MODE:-rw}
+
+      # Mount logs directory (optional)
+      # - ./logs:/app/logs
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Security: Run as non-root user
+    user: "${UID:-1000}:${GID:-1000}"
+
+    # Security: Limit resources
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Command varies by environment
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      ${UVICORN_RELOAD:---reload}
+      --log-level ${LOG_LEVEL:-info}
+      --workers ${API_WORKERS:-1}
+
+    # Network isolation
+    networks:
+      - codecheck_network
+
+  # --------------------------------------------------------------------------
+  # Redis Cache and Session Store
+  # --------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
+    container_name: codecheck_redis
+    restart: unless-stopped
+
+    # Security: Enable password authentication if REDIS_PASSWORD is set
+    command: >
+      sh -c '
+      if [ -n "$REDIS_PASSWORD" ]; then
+        redis-server --requirepass "$REDIS_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru
+      else
+        redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+      fi
+      '
+
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
+
     volumes:
+      # Persistent Redis data
       - redis_data:/data
 
+      # Custom Redis configuration (optional)
+      # - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+
+    healthcheck:
+      test: >
+        sh -c '
+        if [ -n "$REDIS_PASSWORD" ]; then
+          redis-cli -a "$REDIS_PASSWORD" ping | grep PONG
+        else
+          redis-cli ping | grep PONG
+        fi
+        '
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+    # Security: Limit resources
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    # Network isolation
+    networks:
+      - codecheck_network
+
+# --------------------------------------------------------------------------
+# Named Volumes for Data Persistence
+# --------------------------------------------------------------------------
 volumes:
   postgres_data:
+    driver: local
+    # Optional: Use a named volume with specific options
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /path/to/data/postgres
+
   redis_data:
+    driver: local
+    # Optional: Use a named volume with specific options
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /path/to/data/redis
+
+# --------------------------------------------------------------------------
+# Network Configuration
+# --------------------------------------------------------------------------
+networks:
+  codecheck_network:
+    driver: bridge
+    # Optional: Custom network configuration
+    # ipam:
+    #   config:
+    #     - subnet: 172.28.0.0/16
+
+# ============================================================================
+# USAGE INSTRUCTIONS
+# ============================================================================
+#
+# Development:
+# ------------
+# 1. Copy api/.env.example to api/.env
+# 2. Set required environment variables (DB_PASSWORD, JWT_SECRET_KEY, CLAUDE_API_KEY)
+# 3. Run: docker-compose up -d
+# 4. Access API at: http://localhost:8000
+# 5. Access API docs at: http://localhost:8000/docs
+#
+# Production:
+# -----------
+# 1. Create production .env file with secure secrets
+# 2. Set ENVIRONMENT=production
+# 3. Set DEBUG=false
+# 4. Set strong DB_PASSWORD (min 16 chars)
+# 5. Set strong JWT_SECRET_KEY (min 32 chars)
+# 6. Set strong REDIS_PASSWORD
+# 7. Configure ALLOWED_ORIGINS to your domain(s)
+# 8. Remove --reload from uvicorn command
+# 9. Set API_WORKERS to appropriate value (2-4 per CPU core)
+# 10. Mount volumes as read-only where appropriate
+# 11. Consider using Docker secrets for sensitive data
+#
+# Useful Commands:
+# ----------------
+# Start services:         docker-compose up -d
+# Stop services:          docker-compose down
+# View logs:              docker-compose logs -f [service_name]
+# Restart service:        docker-compose restart [service_name]
+# Rebuild images:         docker-compose build --no-cache
+# Remove volumes:         docker-compose down -v
+# Execute in container:   docker-compose exec [service_name] /bin/sh
+#
+# Health Checks:
+# --------------
+# API health:     curl http://localhost:8000/health
+# PostgreSQL:     docker-compose exec postgres pg_isready
+# Redis:          docker-compose exec redis redis-cli ping
+#
+# Security Checklist:
+# -------------------
+# ✅ Database password set via environment variable
+# ✅ JWT secret key set via environment variable
+# ✅ Redis password set (optional but recommended)
+# ✅ Services run as non-root users
+# ✅ Resource limits configured
+# ✅ Health checks enabled
+# ✅ Restart policies configured
+# ✅ Network isolation via custom network
+# ✅ Volumes use named volumes (not bind mounts in production)
+# ✅ CORS configured restrictively
+# ✅ Rate limiting enabled
+# ============================================================================

@@ -1,0 +1,345 @@
+# ============================================================================
+# CodeCheck Project - Git Ignore File
+# ============================================================================
+# This file specifies which files and directories should be excluded from
+# version control to protect sensitive information and avoid clutter.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Environment Variables (CRITICAL - Contains Secrets!)
+# ----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+.env.test
+**/.env
+**/.env.local
+**/.env.production
+**/.env.staging
+
+# Note: .env.example and .env.development are NOT ignored (safe templates)
+
+# ----------------------------------------------------------------------------
+# Python
+# ----------------------------------------------------------------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.pyenv/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ----------------------------------------------------------------------------
+# Database
+# ----------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.sql.backup
+*.dump
+*.log
+
+# PostgreSQL
+*.psql
+pg_log/
+postgresql.conf.backup
+
+# Database connection files
+database.ini
+db.ini
+
+# ----------------------------------------------------------------------------
+# Docker
+# ----------------------------------------------------------------------------
+# Docker volumes (if using bind mounts)
+/volumes/
+/data/postgres/
+/data/redis/
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
+# ----------------------------------------------------------------------------
+# Logs
+# ----------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pip-log.txt
+
+# ----------------------------------------------------------------------------
+# Operating System Files
+# ----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ----------------------------------------------------------------------------
+# IDE and Editors
+# ----------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ----------------------------------------------------------------------------
+# Secrets and Credentials (CRITICAL)
+# ----------------------------------------------------------------------------
+# API Keys
+*api_key*
+*apikey*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Certificates
+*.crt
+*.cer
+*.der
+
+# SSH Keys
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.key
+authorized_keys
+
+# AWS Credentials
+.aws/
+aws-credentials.json
+
+# Google Cloud
+*-credentials.json
+service-account*.json
+gcloud-service-key.json
+
+# Other secrets
+secrets/
+credentials/
+*.credentials
+token.json
+.secrets/
+
+# ----------------------------------------------------------------------------
+# Temporary Files
+# ----------------------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# ----------------------------------------------------------------------------
+# Build and Deployment
+# ----------------------------------------------------------------------------
+.build/
+.deploy/
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# ----------------------------------------------------------------------------
+# Node.js (if used for frontend)
+# ----------------------------------------------------------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+.npm/
+.yarn/
+
+# ----------------------------------------------------------------------------
+# Documentation (Generated)
+# ----------------------------------------------------------------------------
+/site/
+/docs/_build/
+/docs/.doctrees/
+
+# ----------------------------------------------------------------------------
+# Backups
+# ----------------------------------------------------------------------------
+*.backup
+*.bak
+*.orig
+*.rej
+*~
+
+# ----------------------------------------------------------------------------
+# Project Specific
+# ----------------------------------------------------------------------------
+# Claude API cache (if any)
+.claude_cache/
+
+# Uploaded documents and files
+uploads/
+media/
+static/media/
+
+# Generated rule files
+generated_rules/
+
+# Test data
+test_data/
+fixtures/
+
+# Local configuration overrides
+config.local.*
+settings.local.*
+
+# ============================================================================
+# SECURITY REMINDER
+# ============================================================================
+# Always verify sensitive files are listed here before committing!
+#
+# Double-check these critical patterns:
+# - *.env* (except .env.example, .env.development)
+# - *.key
+# - *credentials*
+# - *secret*
+# - *password*
+#
+# To check what you're about to commit:
+#   git status
+#   git diff --staged
+#
+# To check if a file is ignored:
+#   git check-ignore -v <filename>
+#
+# ============================================================================
