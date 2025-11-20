@@ -173,7 +173,7 @@ async def root():
 # ========== Authentication Endpoints ==========
 
 @app.post("/auth/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/hour")
+#@limiter.limit("5/hour")
 async def register(request: Request, user_data: UserCreate):
     """
     Register a new user
@@ -251,7 +251,7 @@ async def register(request: Request, user_data: UserCreate):
         conn.close()
 
 @app.post("/auth/login", response_model=Token)
-@limiter.limit("10/minute")
+#@limiter.limit("10/minute")
 async def login(request: Request, credentials: UserLogin):
     """
     Authenticate user and return JWT tokens
@@ -322,7 +322,7 @@ async def login(request: Request, credentials: UserLogin):
         conn.close()
 
 @app.post("/auth/refresh", response_model=Token)
-@limiter.limit("20/hour")
+#@limiter.limit("20/hour")
 async def refresh_token(request: Request, refresh_request: RefreshTokenRequest):
     """
     Refresh access token using refresh token
@@ -414,7 +414,7 @@ async def get_current_user_info(
 # ========== Protected Endpoints (Require Authentication) ==========
 
 @app.post("/resolve", response_model=ResolveResponse)
-@limiter.limit("30/minute")
+#@limiter.limit("30/minute")
 async def resolve_jurisdiction(
     request: Request,
     resolve_request: ResolveRequest,
@@ -581,9 +581,9 @@ async def query_rules(
         conn.close()
 
 @app.post("/check", response_model=ComplianceResult)
-@limiter.limit("20/minute")
+#@limiter.limit("20/minute")
 async def check_compliance(
-    request_obj: Request,
+    request: Request,
     check_request: ComplianceCheckRequest,
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -695,7 +695,7 @@ async def check_compliance(
         conn.close()
 
 @app.post("/explain")
-@limiter.limit("10/minute")
+#@limiter.limit("10/minute")
 async def explain_rule(
     request: Request,
     rule_id: str,
@@ -772,7 +772,7 @@ async def explain_rule(
         conn.close()
 
 @app.post("/conversation")
-@limiter.limit("10/minute")
+#@limiter.limit("10/minute")
 async def conversational_ai(
     request: Request,
     message: str,
@@ -825,7 +825,7 @@ async def conversational_ai(
         conn.close()
 
 @app.post("/extract-rules")
-@limiter.limit("5/minute")
+#@limiter.limit("5/minute")
 async def extract_rules_from_text(
     request: Request,
     section_text: str,
@@ -990,7 +990,7 @@ async def get_jurisdiction_status(
 
 
 @app.post("/jurisdictions/{jurisdiction_id}/load-codes")
-@limiter.limit("5/minute")
+#@limiter.limit("5/minute")
 async def trigger_code_loading(
     request: Request,
     jurisdiction_id: str,
