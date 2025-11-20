@@ -200,6 +200,14 @@ struct MeasurementResultView: View {
     @State private var notes = ""
     @State private var isCheckingCompliance = false
     @State private var complianceResult: ComplianceResponse?
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var selectedViolationForExplanation: ComplianceViolation?
+    @State private var explanation: String?
+    @State private var isLoadingExplanation = false
+
+    private let codeLookupService = CodeLookupService()
+    private let locationService = LocationService()
 
     var body: some View {
         NavigationStack {
@@ -227,34 +235,93 @@ struct MeasurementResultView: View {
                 }
 
                 if let result = complianceResult {
-                    Section("Compliance Check") {
+                    Section {
                         HStack {
-                            Image(systemName: result.compliant ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(result.compliant ? .green : .red)
+                            Image(systemName: result.isCompliant ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(result.isCompliant ? .green : .red)
+                                .font(.title2)
 
-                            Text(result.compliant ? "Compliant" : "Non-Compliant")
-                                .font(.headline)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(result.isCompliant ? "Compliant" : "Non-Compliant")
+                                    .font(.headline)
+
+                                Text(String(format: "Confidence: %.0f%%", result.confidence * 100))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        .padding(.vertical, 4)
 
                         if let violations = result.violations, !violations.isEmpty {
                             ForEach(violations, id: \.self) { violation in
-                                Label(violation, systemImage: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.red)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundColor(.red)
+                                        Text(violation.message)
+                                            .font(.subheadline)
+                                    }
+
+                                    Text("Section: \(violation.sectionRef)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Button {
+                                        selectedViolationForExplanation = violation
+                                        explainViolation(violation)
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "lightbulb.fill")
+                                            Text("Explain Rule")
+                                        }
+                                        .font(.caption)
+                                    }
+                                    .disabled(isLoadingExplanation)
+                                }
+                                .padding(.vertical, 4)
                             }
                         }
 
-                        if let explanation = result.explanation {
-                            Text(explanation)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        if let recommendations = result.recommendations, !recommendations.isEmpty {
+                            ForEach(recommendations, id: \.self) { recommendation in
+                                Label(recommendation, systemImage: "lightbulb.fill")
+                                    .font(.subheadline)
+                                    .foregroundColor(.orange)
+                            }
                         }
+
+                        if let explanation = explanation {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("AI Explanation")
+                                    .font(.headline)
+                                Text(explanation)
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    } header: {
+                        Text("Compliance Check")
                     }
                 }
 
                 Section {
                     if project != nil {
-                        Button("Check Compliance") {
-                            checkCompliance()
+                        Button {
+                            Task {
+                                await checkCompliance()
+                            }
+                        } label: {
+                            HStack {
+                                if isCheckingCompliance {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "checkmark.shield.fill")
+                                }
+                                Text("Check Compliance")
+                            }
                         }
                         .disabled(isCheckingCompliance)
                     }
@@ -262,6 +329,7 @@ struct MeasurementResultView: View {
                     Button("Save to Project") {
                         saveMeasurement()
                     }
+                    .disabled(isCheckingCompliance)
                 }
             }
             .navigationTitle("Measurement Result")
@@ -273,12 +341,143 @@ struct MeasurementResultView: View {
                     }
                 }
             }
+            .alert("Error", isPresented: $showError) {
+                Button("OK") {
+                    errorMessage = nil
+                }
+                if errorMessage?.contains("Authentication") == true {
+                    Button("Go to Login") {
+                        // TODO: Navigate to login
+                    }
+                }
+            } message: {
+                if let errorMessage = errorMessage {
+                    Text(errorMessage)
+                }
+            }
         }
     }
 
-    private func checkCompliance() {
-        // TODO: Implement compliance checking via API
+    private func checkCompliance() async {
         isCheckingCompliance = true
+        errorMessage = nil
+        explanation = nil
+
+        do {
+            // Step 1: Get current location
+            guard let project = project,
+                  let latitude = project.latitude,
+                  let longitude = project.longitude else {
+                // Fallback to device location
+                let location = try await locationService.getCurrentLocation()
+                await performComplianceCheck(latitude: location.coordinate.latitude,
+                                            longitude: location.coordinate.longitude)
+                return
+            }
+
+            // Use project location
+            await performComplianceCheck(latitude: latitude, longitude: longitude)
+
+        } catch let error as LocationError {
+            errorMessage = error.errorDescription
+            showError = true
+        } catch let error as APIError {
+            errorMessage = error.errorDescription
+            showError = true
+        } catch {
+            errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
+            showError = true
+        }
+
+        isCheckingCompliance = false
+    }
+
+    private func performComplianceCheck(latitude: Double, longitude: Double) async {
+        do {
+            // Step 2: Resolve jurisdiction
+            let jurisdictions = try await codeLookupService.resolveJurisdiction(
+                latitude: latitude,
+                longitude: longitude
+            )
+
+            guard let jurisdiction = jurisdictions.first else {
+                throw APIError.noJurisdictionFound
+            }
+
+            // Step 3: Convert measurement to API format
+            let metricKey = measurementTypeToAPIKey(measurement.type)
+            let metrics = [metricKey: measurement.value]
+
+            // Step 4: Check compliance
+            let result = try await codeLookupService.checkCompliance(
+                jurisdictionId: jurisdiction.id,
+                metrics: metrics
+            )
+
+            // Update UI on main thread
+            await MainActor.run {
+                complianceResult = result
+            }
+
+        } catch let error as APIError {
+            await MainActor.run {
+                errorMessage = error.errorDescription
+                showError = true
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = "Failed to check compliance: \(error.localizedDescription)"
+                showError = true
+            }
+        }
+    }
+
+    private func explainViolation(_ violation: ComplianceViolation) {
+        isLoadingExplanation = true
+        explanation = nil
+
+        Task {
+            do {
+                let explainResponse = try await codeLookupService.explainRule(
+                    ruleId: violation.ruleId,
+                    measurementValue: measurement.value
+                )
+
+                await MainActor.run {
+                    explanation = explainResponse.explanation
+                    isLoadingExplanation = false
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    errorMessage = error.errorDescription
+                    showError = true
+                    isLoadingExplanation = false
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Failed to get explanation: \(error.localizedDescription)"
+                    showError = true
+                    isLoadingExplanation = false
+                }
+            }
+        }
+    }
+
+    private func measurementTypeToAPIKey(_ type: MeasurementType) -> String {
+        switch type {
+        case .stairTread:
+            return "stair_tread_in"
+        case .stairRiser:
+            return "stair_riser_in"
+        case .doorWidth:
+            return "door_width_in"
+        case .railingHeight:
+            return "railing_height_in"
+        case .ceilingHeight:
+            return "ceiling_height_in"
+        case .custom:
+            return "custom_in"
+        }
     }
 
     private func saveMeasurement() {

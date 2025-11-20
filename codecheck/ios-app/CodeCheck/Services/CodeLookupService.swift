@@ -8,12 +8,31 @@ class CodeLookupService {
     private let baseURL = "http://localhost:8000"
 
     private let session: URLSession
+    private let authService: AuthService?
 
-    init() {
+    init(authService: AuthService? = nil) {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
         self.session = URLSession(configuration: configuration)
+        self.authService = authService
+    }
+
+    // MARK: - Authentication
+    private func addAuthHeader(to request: inout URLRequest) async throws {
+        // Try to get token from AuthService first
+        if let authService = authService {
+            guard let token = try await authService.getValidAccessToken() else {
+                throw APIError.unauthorized
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            // Fallback to checking UserDefaults (for backward compatibility)
+            guard let token = UserDefaults.standard.string(forKey: "auth_token") else {
+                throw APIError.unauthorized
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     // MARK: - Jurisdiction Resolution
@@ -23,6 +42,7 @@ class CodeLookupService {
         var request = URLRequest(url: URL(string: endpoint)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "latitude": latitude,
@@ -33,8 +53,15 @@ class CodeLookupService {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
 
@@ -50,6 +77,7 @@ class CodeLookupService {
         var request = URLRequest(url: URL(string: endpoint)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
 
         let complianceRequest = ComplianceRequest(
             jurisdictionId: jurisdictionId,
@@ -62,13 +90,59 @@ class CodeLookupService {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
 
         let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(ComplianceResponse.self, from: data)
+    }
+
+    // MARK: - Rule Explanation
+    func explainRule(ruleId: String, measurementValue: Double? = nil) async throws -> ExplainResponse {
+        var urlComponents = URLComponents(string: "\(baseURL)/explain")!
+        urlComponents.queryItems = [
+            URLQueryItem(name: "rule_id", value: ruleId)
+        ]
+        if let value = measurementValue {
+            urlComponents.queryItems?.append(URLQueryItem(name: "measurement_value", value: String(value)))
+        }
+
+        guard let url = urlComponents.url else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(ExplainResponse.self, from: data)
     }
 
     // MARK: - AI Conversation
@@ -78,6 +152,7 @@ class CodeLookupService {
         var request = URLRequest(url: URL(string: endpoint)!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
 
         let conversationRequest = ConversationRequest(
             message: message,
@@ -91,8 +166,15 @@ class CodeLookupService {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
 
@@ -122,6 +204,8 @@ enum APIError: LocalizedError {
     case invalidResponse
     case decodingError
     case networkError(Error)
+    case unauthorized
+    case noJurisdictionFound
 
     var errorDescription: String? {
         switch self {
@@ -133,6 +217,10 @@ enum APIError: LocalizedError {
             return "Failed to decode response"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .unauthorized:
+            return "Authentication required. Please log in."
+        case .noJurisdictionFound:
+            return "No jurisdiction found for your location"
         }
     }
 }

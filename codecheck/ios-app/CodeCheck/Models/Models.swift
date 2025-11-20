@@ -113,10 +113,61 @@ struct ComplianceRequest: Codable {
 }
 
 struct ComplianceResponse: Codable {
-    let compliant: Bool
-    let violations: [String]?
-    let warnings: [String]?
-    let explanation: String?
+    let isCompliant: Bool
+    let violations: [ComplianceViolation]?
+    let recommendations: [String]?
+    let confidence: Double
+
+    enum CodingKeys: String, CodingKey {
+        case isCompliant = "is_compliant"
+        case violations
+        case recommendations
+        case confidence
+    }
+}
+
+struct ComplianceViolation: Codable, Hashable {
+    let ruleId: String
+    let sectionRef: String
+    let metric: String
+    let measuredValue: Double
+    let requiredValue: Double
+    let unit: String
+    let requirementType: String
+    let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case sectionRef = "section_ref"
+        case metric
+        case measuredValue = "measured_value"
+        case requiredValue = "required_value"
+        case unit
+        case requirementType = "requirement_type"
+        case message
+    }
+}
+
+struct ExplainRequest: Codable {
+    let ruleId: String
+    let measurementValue: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case measurementValue = "measurement_value"
+    }
+}
+
+struct ExplainResponse: Codable {
+    let ruleId: String
+    let explanation: String
+    let confidence: Double
+
+    enum CodingKeys: String, CodingKey {
+        case ruleId = "rule_id"
+        case explanation
+        case confidence
+    }
 }
 
 struct ConversationRequest: Codable {
@@ -150,4 +201,60 @@ enum QuickActionType {
     case askAI
     case checkCompliance
     case viewProjects
+}
+
+// MARK: - Authentication Models
+struct User: Codable, Identifiable {
+    let id: String
+    let email: String
+    let name: String?
+    let createdAt: Date?
+    let emailVerified: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case name
+        case createdAt = "created_at"
+        case emailVerified = "email_verified"
+    }
+}
+
+struct AuthResponse: Codable {
+    let accessToken: String
+    let refreshToken: String
+    let tokenType: String
+    let expiresIn: Int
+    let user: User
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType = "token_type"
+        case expiresIn = "expires_in"
+        case user
+    }
+}
+
+struct LoginRequest: Codable {
+    let email: String
+    let password: String
+}
+
+struct RegisterRequest: Codable {
+    let email: String
+    let password: String
+    let name: String?
+}
+
+struct RefreshTokenRequest: Codable {
+    let refreshToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case refreshToken = "refresh_token"
+    }
+}
+
+struct AuthError: Codable {
+    let detail: String
 }
