@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCheck - AI Construction Compliance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 min-h-screen">
+    <div x-data="codeCheckApp()" class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold text-white mb-4">
+                <i class="fas fa-hard-hat mr-4"></i>
+                CodeCheck
+            </h1>
+            <p class="text-xl text-blue-200">AI-Powered Construction Compliance Assistant</p>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Left Panel - Jurisdiction & Compliance -->
+            <div class="space-y-6">
+                <!-- Jurisdiction Resolver -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                    <h2 class="text-2xl font-semibold text-white mb-4">
+                        <i class="fas fa-map-marker-alt mr-2"></i>
+                        Find Jurisdiction
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-blue-200 mb-2">Latitude</label>
+                                <input x-model="latitude" type="number" step="0.000001" 
+                                       class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                       placeholder="39.7392">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-blue-200 mb-2">Longitude</label>
+                                <input x-model="longitude" type="number" step="0.000001"
+                                       class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                       placeholder="-104.9903">
+                            </div>
+                        </div>
+                        
+                        <button @click="resolveJurisdiction()" 
+                                :disabled="loading.jurisdiction"
+                                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200">
+                            <i x-show="!loading.jurisdiction" class="fas fa-search mr-2"></i>
+                            <i x-show="loading.jurisdiction" class="fas fa-spinner fa-spin mr-2"></i>
+                            Find Jurisdiction
+                        </button>
+                    </div>
+
+                    <!-- Jurisdiction Results -->
+                    <div x-show="jurisdictions.length > 0" class="mt-6">
+                        <h3 class="text-lg font-semibold text-white mb-3">Found Jurisdictions:</h3>
+                        <div class="space-y-2">
+                            <template x-for="jurisdiction in jurisdictions" :key="jurisdiction.id">
+                                <div class="bg-white/10 rounded-lg p-4 border border-white/20">
+                                    <h4 class="font-semibold text-white" x-text="jurisdiction.name"></h4>
+                                    <p class="text-blue-200 text-sm" x-text="jurisdiction.type"></p>
+                                    <button @click="selectJurisdiction(jurisdiction)" 
+                                            class="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-colors duration-200">
+                                        Select
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Compliance Checker -->
+                <div x-show="selectedJurisdiction" class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                    <h2 class="text-2xl font-semibold text-white mb-4">
+                        <i class="fas fa-clipboard-check mr-2"></i>
+                        Compliance Check
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-blue-200 mb-2">Selected Jurisdiction</label>
+                            <div class="bg-white/20 rounded-lg p-3 text-white">
+                                <span x-text="selectedJurisdiction?.name"></span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h3 class="text-lg font-semibold text-white">Measurements:</h3>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-blue-200 mb-2">Stair Tread (inches)</label>
+                                    <input x-model="measurements.stair_tread_in" type="number" step="0.1"
+                                           class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                           placeholder="11.0">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-blue-200 mb-2">Stair Riser (inches)</label>
+                                    <input x-model="measurements.stair_riser_in" type="number" step="0.1"
+                                           class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                           placeholder="7.5">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-blue-200 mb-2">Door Width (inches)</label>
+                                    <input x-model="measurements.door_width_in" type="number" step="0.1"
+                                           class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                           placeholder="32.0">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-blue-200 mb-2">Railing Height (inches)</label>
+                                    <input x-model="measurements.railing_height_in" type="number" step="0.1"
+                                           class="w-full px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                           placeholder="36.0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button @click="checkCompliance()" 
+                                :disabled="loading.compliance"
+                                class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200">
+                            <i x-show="!loading.compliance" class="fas fa-check-circle mr-2"></i>
+                            <i x-show="loading.compliance" class="fas fa-spinner fa-spin mr-2"></i>
+                            Check Compliance
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Results & Chat -->
+            <div class="space-y-6">
+                <!-- Compliance Results -->
+                <div x-show="complianceResult" class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                    <h2 class="text-2xl font-semibold text-white mb-4">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        Compliance Results
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Overall Status -->
+                        <div class="flex items-center space-x-3">
+                            <div class="flex-shrink-0">
+                                <i :class="complianceResult?.is_compliant ? 'fas fa-check-circle text-green-400' : 'fas fa-times-circle text-red-400'" 
+                                   class="text-2xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-white">
+                                    <span x-text="complianceResult?.is_compliant ? 'Compliant' : 'Non-Compliant'"></span>
+                                </h3>
+                                <p class="text-blue-200">Confidence: <span x-text="Math.round((complianceResult?.confidence || 0) * 100) + '%'"></span></p>
+                            </div>
+                        </div>
+
+                        <!-- Violations -->
+                        <div x-show="complianceResult?.violations?.length > 0">
+                            <h4 class="text-lg font-semibold text-red-400 mb-2">Violations:</h4>
+                            <div class="space-y-2">
+                                <template x-for="violation in complianceResult.violations" :key="violation.rule_id">
+                                    <div class="bg-red-900/30 border border-red-500/30 rounded-lg p-3">
+                                        <p class="text-red-200" x-text="violation.message"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Recommendations -->
+                        <div x-show="complianceResult?.recommendations?.length > 0">
+                            <h4 class="text-lg font-semibold text-blue-400 mb-2">Recommendations:</h4>
+                            <div class="space-y-2">
+                                <template x-for="recommendation in complianceResult.recommendations" :key="recommendation">
+                                    <div class="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3">
+                                        <p class="text-blue-200" x-text="recommendation"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Chat -->
+                <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20">
+                    <h2 class="text-2xl font-semibold text-white mb-4">
+                        <i class="fas fa-robot mr-2"></i>
+                        AI Assistant
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-white/10 rounded-lg p-4 max-h-64 overflow-y-auto">
+                            <template x-for="message in chatMessages" :key="message.id">
+                                <div class="mb-3" :class="message.role === 'user' ? 'text-right' : 'text-left'">
+                                    <div class="inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg"
+                                         :class="message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/20 text-white'">
+                                        <p x-text="message.content"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <input x-model="chatInput" @keyup.enter="sendMessage()" type="text"
+                                   class="flex-1 px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                   placeholder="Ask about building codes...">
+                            <button @click="sendMessage()" 
+                                    :disabled="loading.chat || !chatInput.trim()"
+                                    class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors duration-200">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-blue-200">
+            <p>&copy; 2024 CodeCheck - AI-Powered Construction Compliance</p>
+        </footer>
+    </div>
+
+    <script>
+        function codeCheckApp() {
+            return {
+                // State
+                latitude: 39.7392,
+                longitude: -104.9903,
+                jurisdictions: [],
+                selectedJurisdiction: null,
+                measurements: {
+                    stair_tread_in: 11.0,
+                    stair_riser_in: 7.5,
+                    door_width_in: 32.0,
+                    railing_height_in: 36.0
+                },
+                complianceResult: null,
+                chatInput: '',
+                chatMessages: [],
+                loading: {
+                    jurisdiction: false,
+                    compliance: false,
+                    chat: false
+                },
+
+                // Methods
+                async resolveJurisdiction() {
+                    this.loading.jurisdiction = true;
+                    try {
+                        const response = await fetch('http://localhost:8000/resolve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                latitude: parseFloat(this.latitude),
+                                longitude: parseFloat(this.longitude)
+                            })
+                        });
+                        const data = await response.json();
+                        this.jurisdictions = data.jurisdictions || [];
+                    } catch (error) {
+                        console.error('Error resolving jurisdiction:', error);
+                        alert('Error resolving jurisdiction. Please check if the API is running.');
+                    } finally {
+                        this.loading.jurisdiction = false;
+                    }
+                },
+
+                selectJurisdiction(jurisdiction) {
+                    this.selectedJurisdiction = jurisdiction;
+                },
+
+                async checkCompliance() {
+                    if (!this.selectedJurisdiction) {
+                        alert('Please select a jurisdiction first.');
+                        return;
+                    }
+
+                    this.loading.compliance = true;
+                    try {
+                        const metrics = {};
+                        Object.entries(this.measurements).forEach(([key, value]) => {
+                            if (value && value > 0) {
+                                metrics[key] = parseFloat(value);
+                            }
+                        });
+
+                        const response = await fetch('http://localhost:8000/check', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                jurisdiction_id: this.selectedJurisdiction.id,
+                                metrics: metrics
+                            })
+                        });
+                        const data = await response.json();
+                        this.complianceResult = data;
+                    } catch (error) {
+                        console.error('Error checking compliance:', error);
+                        alert('Error checking compliance. Please check if the API is running.');
+                    } finally {
+                        this.loading.compliance = false;
+                    }
+                },
+
+                async sendMessage() {
+                    if (!this.chatInput.trim()) return;
+
+                    const userMessage = {
+                        id: Date.now(),
+                        role: 'user',
+                        content: this.chatInput
+                    };
+                    this.chatMessages.push(userMessage);
+                    
+                    const messageText = this.chatInput;
+                    this.chatInput = '';
+                    this.loading.chat = true;
+
+                    try {
+                        const response = await fetch(`http://localhost:8000/conversation?message=${encodeURIComponent(messageText)}`, {
+                            method: 'POST'
+                        });
+                        const data = await response.json();
+                        
+                        this.chatMessages.push({
+                            id: Date.now() + 1,
+                            role: 'assistant',
+                            content: data.response || 'Sorry, I could not process your request.'
+                        });
+                    } catch (error) {
+                        console.error('Error sending message:', error);
+                        this.chatMessages.push({
+                            id: Date.now() + 1,
+                            role: 'assistant',
+                            content: 'Sorry, there was an error processing your message. Please check if the API is running.'
+                        });
+                    } finally {
+                        this.loading.chat = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
