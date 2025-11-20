@@ -205,6 +205,10 @@ struct MeasurementResultView: View {
     @State private var selectedViolationForExplanation: ComplianceViolation?
     @State private var explanation: String?
     @State private var isLoadingExplanation = false
+    @State private var isLoadingCodes = false
+    @State private var loadingProgress: Int = 0
+    @State private var loadingMessage: String = ""
+    @State private var loadingTask: Task<Void, Never>?
 
     private let codeLookupService = CodeLookupService()
     private let locationService = LocationService()
@@ -232,6 +236,73 @@ struct MeasurementResultView: View {
                 Section("Notes") {
                     TextEditor(text: $notes)
                         .frame(height: 100)
+                }
+
+                if isLoadingCodes {
+                    Section {
+                        VStack(spacing: 16) {
+                            HStack {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .foregroundColor(.blue)
+                                    .font(.title2)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Loading Building Codes")
+                                        .font(.headline)
+
+                                    Text(loadingMessage)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+
+                            // Progress Bar
+                            VStack(spacing: 8) {
+                                GeometryReader { geometry in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(height: 20)
+
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [.blue, .purple],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                            .frame(width: geometry.size.width * CGFloat(loadingProgress) / 100.0, height: 20)
+                                            .animation(.easeInOut(duration: 0.3), value: loadingProgress)
+                                    }
+                                }
+                                .frame(height: 20)
+
+                                HStack {
+                                    Text("\(loadingProgress)%")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                            }
+
+                            Button(role: .destructive) {
+                                cancelLoading()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "xmark.circle")
+                                    Text("Cancel")
+                                }
+                                .font(.caption)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    } header: {
+                        Text("Code Loading Progress")
+                    }
                 }
 
                 if let result = complianceResult {
@@ -404,11 +475,55 @@ struct MeasurementResultView: View {
                 throw APIError.noJurisdictionFound
             }
 
-            // Step 3: Convert measurement to API format
+            // Step 3: Check if codes are loaded
+            let status = try await codeLookupService.checkJurisdictionStatus(
+                jurisdictionId: jurisdiction.id
+            )
+
+            switch status.status {
+            case "ready":
+                // Codes available, proceed with compliance check
+                break
+
+            case "loading":
+                // Show loading progress
+                await MainActor.run {
+                    isLoadingCodes = true
+                    loadingProgress = status.progress ?? 0
+                    loadingMessage = "Loading building codes for \(jurisdiction.name)..."
+                }
+
+                // Poll for completion
+                try await pollForCompletion(jurisdictionId: jurisdiction.id, jurisdictionName: jurisdiction.name)
+
+            case "not_loaded":
+                // Trigger loading
+                await MainActor.run {
+                    isLoadingCodes = true
+                    loadingProgress = 0
+                    loadingMessage = "Initiating code download for \(jurisdiction.name)..."
+                }
+
+                let response = try await codeLookupService.triggerCodeLoading(
+                    jurisdictionId: jurisdiction.id
+                )
+
+                await MainActor.run {
+                    loadingMessage = "Loading building codes. This may take 30-60 seconds..."
+                }
+
+                // Poll for completion
+                try await pollForCompletion(jurisdictionId: jurisdiction.id, jurisdictionName: jurisdiction.name)
+
+            default:
+                break
+            }
+
+            // Step 4: Convert measurement to API format
             let metricKey = measurementTypeToAPIKey(measurement.type)
             let metrics = [metricKey: measurement.value]
 
-            // Step 4: Check compliance
+            // Step 5: Check compliance
             let result = try await codeLookupService.checkCompliance(
                 jurisdictionId: jurisdiction.id,
                 metrics: metrics
@@ -417,19 +532,84 @@ struct MeasurementResultView: View {
             // Update UI on main thread
             await MainActor.run {
                 complianceResult = result
+                isLoadingCodes = false
+                loadingProgress = 0
+                loadingMessage = ""
             }
 
         } catch let error as APIError {
             await MainActor.run {
                 errorMessage = error.errorDescription
                 showError = true
+                isLoadingCodes = false
+                loadingProgress = 0
+                loadingMessage = ""
             }
         } catch {
             await MainActor.run {
                 errorMessage = "Failed to check compliance: \(error.localizedDescription)"
                 showError = true
+                isLoadingCodes = false
+                loadingProgress = 0
+                loadingMessage = ""
             }
         }
+    }
+
+    private func pollForCompletion(jurisdictionId: String, jurisdictionName: String) async throws {
+        var attempts = 0
+        let maxAttempts = 60  // 60 seconds max
+
+        loadingTask = Task {
+            while attempts < maxAttempts {
+                // Check if task was cancelled
+                if Task.isCancelled {
+                    throw CancellationError()
+                }
+
+                try await Task.sleep(nanoseconds: 1_000_000_000)  // 1 second
+
+                do {
+                    let status = try await codeLookupService.checkJurisdictionStatus(
+                        jurisdictionId: jurisdictionId
+                    )
+
+                    await MainActor.run {
+                        if let progress = status.progress {
+                            loadingProgress = progress
+                        }
+                        loadingMessage = status.message
+                    }
+
+                    if status.status == "ready" {
+                        await MainActor.run {
+                            loadingMessage = "Building codes loaded successfully!"
+                        }
+                        return
+                    }
+
+                    attempts += 1
+                } catch {
+                    // If polling fails, continue trying
+                    attempts += 1
+                }
+            }
+
+            // Timeout reached
+            throw APIError.timeout
+        }
+
+        try await loadingTask?.value
+    }
+
+    private func cancelLoading() {
+        loadingTask?.cancel()
+        isLoadingCodes = false
+        loadingProgress = 0
+        loadingMessage = ""
+        isCheckingCompliance = false
+        errorMessage = "Code loading cancelled by user"
+        showError = true
     }
 
     private func explainViolation(_ violation: ComplianceViolation) {

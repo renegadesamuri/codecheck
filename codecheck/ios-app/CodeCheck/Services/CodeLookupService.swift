@@ -196,6 +196,94 @@ class CodeLookupService {
 
         return true
     }
+
+    // MARK: - On-Demand Code Loading
+    func checkJurisdictionStatus(jurisdictionId: String) async throws -> JurisdictionStatus {
+        guard let url = URL(string: "\(baseURL)/jurisdictions/\(jurisdictionId)/status") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(JurisdictionStatus.self, from: data)
+    }
+
+    func triggerCodeLoading(jurisdictionId: String) async throws -> CodeLoadingResponse {
+        guard let url = URL(string: "\(baseURL)/jurisdictions/\(jurisdictionId)/load-codes") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(CodeLoadingResponse.self, from: data)
+    }
+
+    func getJobProgress(jobId: String) async throws -> JobProgress {
+        guard let url = URL(string: "\(baseURL)/jobs/\(jobId)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        try await addAuthHeader(to: &request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.invalidResponse
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(JobProgress.self, from: data)
+    }
 }
 
 // MARK: - API Errors
@@ -206,6 +294,7 @@ enum APIError: LocalizedError {
     case networkError(Error)
     case unauthorized
     case noJurisdictionFound
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -221,6 +310,8 @@ enum APIError: LocalizedError {
             return "Authentication required. Please log in."
         case .noJurisdictionFound:
             return "No jurisdiction found for your location"
+        case .timeout:
+            return "Code loading timed out. Please try again."
         }
     }
 }

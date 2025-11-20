@@ -258,3 +258,44 @@ struct RefreshTokenRequest: Codable {
 struct AuthError: Codable {
     let detail: String
 }
+
+// MARK: - On-Demand Code Loading Models
+struct JurisdictionStatus: Codable {
+    let status: String  // "ready", "loading", "not_loaded"
+    let ruleCount: Int?
+    let progress: Int?
+    let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case ruleCount = "rule_count"
+        case progress
+        case message
+    }
+}
+
+struct CodeLoadingResponse: Codable {
+    let status: String
+    let jobId: String?
+    let message: String
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case jobId = "job_id"
+        case message
+    }
+}
+
+struct JobProgress: Codable {
+    let jobId: String
+    let status: String
+    let progress: Int
+    let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case jobId = "job_id"
+        case status
+        case progress
+        case message
+    }
+}

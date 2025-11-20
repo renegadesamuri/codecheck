@@ -26,6 +26,14 @@ from security import (
     limiter, get_cors_origins, ClaudeRateLimiter
 )
 
+# Import job queue for on-demand code loading
+from job_queue import (
+    job_queue, JobStatus,
+    create_code_loading_job, get_job_status,
+    update_job_progress, mark_job_completed, mark_job_failed,
+    has_active_job_for_jurisdiction
+)
+
 app = FastAPI(
     title="CodeCheck API",
     description="AI-Powered Construction Compliance Assistant API",
@@ -878,6 +886,482 @@ async def extract_rules_from_text(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+@app.get("/jurisdictions/{jurisdiction_id}/status")
+async def get_jurisdiction_status(
+    jurisdiction_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Check if jurisdiction has rules loaded and get loading status
+    Requires authentication
+
+    Returns:
+        - status: 'ready', 'loading', 'not_loaded', or 'failed'
+        - rule_count: Number of rules available
+        - progress: Loading progress (0-100) if loading
+        - message: Status message
+        - job_id: Active job ID if loading
+    """
+    # Validate jurisdiction_id format
+    if not InputValidator.validate_uuid(jurisdiction_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid jurisdiction ID format"
+        )
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Check rule count
+            cursor.execute("""
+                SELECT COUNT(*) as rule_count
+                FROM rule
+                WHERE jurisdiction_id = %s
+            """, (jurisdiction_id,))
+
+            result = cursor.fetchone()
+            rule_count = result['rule_count']
+
+            # Check if job is running
+            cursor.execute("""
+                SELECT id, status, progress_percentage, error_message
+                FROM agent_jobs
+                WHERE jurisdiction_id = %s
+                AND status IN ('pending', 'running')
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (jurisdiction_id,))
+
+            job = cursor.fetchone()
+
+            if rule_count > 0:
+                return {
+                    "status": "ready",
+                    "rule_count": rule_count,
+                    "progress": 100,
+                    "message": "Rules available",
+                    "job_id": None
+                }
+            elif job:
+                job_status_map = {
+                    'pending': 'loading',
+                    'running': 'loading'
+                }
+                return {
+                    "status": job_status_map.get(job['status'], 'loading'),
+                    "rule_count": 0,
+                    "progress": job['progress_percentage'],
+                    "message": f"Loading building codes... ({job['progress_percentage']}%)",
+                    "job_id": job['id']
+                }
+            else:
+                # Check if there was a previous failed attempt
+                cursor.execute("""
+                    SELECT error_message
+                    FROM agent_jobs
+                    WHERE jurisdiction_id = %s
+                    AND status = 'failed'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (jurisdiction_id,))
+
+                failed_job = cursor.fetchone()
+                if failed_job:
+                    return {
+                        "status": "failed",
+                        "rule_count": 0,
+                        "progress": 0,
+                        "message": f"Loading failed: {failed_job['error_message']}",
+                        "job_id": None
+                    }
+
+                return {
+                    "status": "not_loaded",
+                    "rule_count": 0,
+                    "progress": 0,
+                    "message": "No rules available yet",
+                    "job_id": None
+                }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.post("/jurisdictions/{jurisdiction_id}/load-codes")
+@limiter.limit("5/minute")
+async def trigger_code_loading(
+    request: Request,
+    jurisdiction_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Trigger on-demand code loading for a jurisdiction
+    Requires authentication
+    Rate limited to 5 requests per minute
+
+    Returns:
+        - status: 'already_loaded', 'loading', or 'initiated'
+        - job_id: Job identifier for tracking progress
+        - message: Status message
+    """
+    # Validate jurisdiction_id format
+    if not InputValidator.validate_uuid(jurisdiction_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid jurisdiction ID format"
+        )
+
+    conn = get_db_connection()
+    try:
+        # Check if jurisdiction exists
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT id, name FROM jurisdiction WHERE id = %s
+            """, (jurisdiction_id,))
+
+            jurisdiction = cursor.fetchone()
+            if not jurisdiction:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Jurisdiction not found"
+                )
+
+            # Check if already loaded
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM rule
+                WHERE jurisdiction_id = %s
+            """, (jurisdiction_id,))
+
+            if cursor.fetchone()['count'] > 0:
+                return {
+                    "status": "already_loaded",
+                    "job_id": None,
+                    "message": f"Codes already available for {jurisdiction['name']}"
+                }
+
+            # Check if job already running
+            cursor.execute("""
+                SELECT id, status, progress_percentage FROM agent_jobs
+                WHERE jurisdiction_id = %s
+                AND status IN ('pending', 'running')
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (jurisdiction_id,))
+
+            existing_job = cursor.fetchone()
+            if existing_job:
+                return {
+                    "status": "loading",
+                    "job_id": existing_job['id'],
+                    "progress": existing_job['progress_percentage'],
+                    "message": f"Loading already in progress for {jurisdiction['name']}"
+                }
+
+        # Create new job
+        job_id = create_code_loading_job(jurisdiction_id)
+
+        # Record in database
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO agent_jobs (id, jurisdiction_id, job_type, status, progress_percentage)
+                VALUES (%s, %s, 'load_codes', 'pending', 0)
+            """, (job_id, jurisdiction_id))
+
+            # Update jurisdiction status
+            cursor.execute("""
+                INSERT INTO jurisdiction_data_status (jurisdiction_id, status)
+                VALUES (%s, 'pending')
+                ON CONFLICT (jurisdiction_id)
+                DO UPDATE SET status = 'pending', updated_at = NOW()
+            """, (jurisdiction_id,))
+
+            conn.commit()
+
+        # Log the action
+        AuditLogger.log_event(
+            conn,
+            user_id=current_user.user_id,
+            action="trigger_code_loading",
+            resource_type="jurisdiction",
+            resource_id=jurisdiction_id,
+            ip_address=request.client.host if request.client else None,
+            details={"job_id": job_id}
+        )
+
+        # Trigger background processing
+        asyncio.create_task(process_code_loading(job_id, jurisdiction_id, jurisdiction['name']))
+
+        return {
+            "status": "initiated",
+            "job_id": job_id,
+            "message": f"Code loading initiated for {jurisdiction['name']}. This may take 30-60 seconds."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/jobs/{job_id}")
+async def get_job_progress(
+    job_id: str,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Get the status and progress of a background job
+    Requires authentication
+
+    Returns:
+        - id: Job identifier
+        - status: 'pending', 'running', 'completed', or 'failed'
+        - progress: Progress percentage (0-100)
+        - result: Job result (if completed)
+        - error: Error message (if failed)
+    """
+    # Validate job_id format
+    if not InputValidator.validate_uuid(job_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid job ID format"
+        )
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT
+                    id,
+                    jurisdiction_id,
+                    job_type,
+                    status,
+                    progress_percentage,
+                    result,
+                    error_message,
+                    started_at,
+                    completed_at,
+                    created_at
+                FROM agent_jobs
+                WHERE id = %s
+            """, (job_id,))
+
+            job = cursor.fetchone()
+            if not job:
+                raise HTTPException(status_code=404, detail="Job not found")
+
+            return {
+                "id": job['id'],
+                "jurisdiction_id": job['jurisdiction_id'],
+                "job_type": job['job_type'],
+                "status": job['status'],
+                "progress": job['progress_percentage'],
+                "result": job['result'],
+                "error": job['error_message'],
+                "started_at": job['started_at'].isoformat() if job['started_at'] else None,
+                "completed_at": job['completed_at'].isoformat() if job['completed_at'] else None,
+                "created_at": job['created_at'].isoformat() if job['created_at'] else None
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+async def process_code_loading(job_id: str, jurisdiction_id: str, jurisdiction_name: str):
+    """
+    Background task to load codes for a jurisdiction using AgentCoordinator
+
+    Orchestrates the multi-agent workflow:
+    1. Source Discovery Agent - Find code sources
+    2. Document Fetcher Agent - Download documents
+    3. Rule Extractor Agent - Extract structured rules
+    4. Database Persistence - Save rules to database
+
+    Args:
+        job_id: Job identifier for progress tracking
+        jurisdiction_id: Target jurisdiction UUID
+        jurisdiction_name: Jurisdiction name for logging
+    """
+    import logging
+    import sys
+    import os
+
+    # Add agents directory to path for imports
+    agents_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'agents')
+    if agents_path not in sys.path:
+        sys.path.insert(0, agents_path)
+
+    from coordinator import create_agent_coordinator
+
+    logger = logging.getLogger(__name__)
+
+    conn = None
+    try:
+        logger.info(f"Starting code loading job {job_id} for {jurisdiction_name}")
+
+        # Update job status to running
+        update_job_progress(job_id, 5, JobStatus.RUNNING)
+
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE agent_jobs
+                SET status = 'running', progress_percentage = 5, started_at = NOW()
+                WHERE id = %s
+            """, (job_id,))
+
+            cursor.execute("""
+                UPDATE jurisdiction_data_status
+                SET status = 'loading', last_fetch_attempt = NOW(), updated_at = NOW()
+                WHERE jurisdiction_id = %s
+            """, (jurisdiction_id,))
+
+            conn.commit()
+
+        # Progress callback to update job status in database
+        def progress_callback(progress: int, message: str):
+            """Update job progress in database and job queue"""
+            try:
+                # Update in-memory job queue
+                update_job_progress(job_id, progress)
+
+                # Update database
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE agent_jobs
+                        SET progress_percentage = %s, progress_message = %s, updated_at = NOW()
+                        WHERE id = %s
+                    """, (progress, message, job_id))
+                    conn.commit()
+
+                logger.info(f"Job {job_id}: [{progress}%] {message}")
+            except Exception as e:
+                logger.error(f"Failed to update progress for job {job_id}: {e}")
+
+        # Get database configuration
+        db_config = {
+            'host': os.getenv('DB_HOST', 'localhost'),
+            'port': os.getenv('DB_PORT', '5432'),
+            'user': os.getenv('DB_USER', 'postgres'),
+            'password': os.getenv('DB_PASSWORD', ''),
+            'database': os.getenv('DB_NAME', 'codecheck')
+        }
+
+        # Create agent coordinator
+        coordinator = create_agent_coordinator(
+            db_config=db_config,
+            claude_api_key=os.getenv('CLAUDE_API_KEY')
+        )
+
+        # Get jurisdiction details
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("""
+                SELECT name, type FROM jurisdiction WHERE id = %s
+            """, (jurisdiction_id,))
+            jurisdiction = cursor.fetchone()
+
+            if not jurisdiction:
+                raise Exception(f"Jurisdiction {jurisdiction_id} not found")
+
+            jurisdiction_type = jurisdiction.get('type')
+
+            # Extract state from name if available (e.g., "Denver, CO" -> "CO")
+            state = None
+            if ',' in jurisdiction_name:
+                parts = jurisdiction_name.split(',')
+                if len(parts) >= 2:
+                    state = parts[-1].strip()
+
+        # Execute agent workflow
+        logger.info(f"Starting agent workflow for {jurisdiction_name}")
+        result = await coordinator.load_codes_for_jurisdiction(
+            jurisdiction_id=jurisdiction_id,
+            jurisdiction_name=jurisdiction_name,
+            jurisdiction_type=jurisdiction_type,
+            state=state,
+            progress_callback=progress_callback
+        )
+
+        if result.get('success'):
+            # Successfully loaded codes
+            rules_count = result.get('rules_count', 0)
+            sources_found = result.get('sources_found', 0)
+            sources_used = result.get('sources_used', 0)
+
+            with conn.cursor() as cursor:
+                # Update job as completed
+                cursor.execute("""
+                    UPDATE agent_jobs
+                    SET
+                        status = 'completed',
+                        progress_percentage = 100,
+                        result = %s,
+                        completed_at = NOW()
+                    WHERE id = %s
+                """, (
+                    psycopg2.extras.Json({
+                        "rules_count": rules_count,
+                        "sources_found": sources_found,
+                        "sources_used": sources_used
+                    }),
+                    job_id
+                ))
+
+                # Update jurisdiction status (coordinator should have done this, but double-check)
+                cursor.execute("""
+                    SELECT update_jurisdiction_status(%s, %s, %s, %s)
+                """, (jurisdiction_id, 'complete', rules_count, None))
+
+                conn.commit()
+
+            mark_job_completed(job_id, {
+                "rules_count": rules_count,
+                "sources_found": sources_found,
+                "sources_used": sources_used
+            })
+
+            logger.info(f"Job {job_id} completed successfully. Loaded {rules_count} rules for {jurisdiction_name}")
+
+        else:
+            # Workflow failed
+            error_message = result.get('error', 'Unknown error during code loading')
+            raise Exception(error_message)
+
+    except Exception as e:
+        logger.error(f"Job {job_id} failed: {str(e)}", exc_info=True)
+
+        # Mark job as failed
+        mark_job_failed(job_id, str(e))
+
+        if conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE agent_jobs
+                        SET status = 'failed', error_message = %s, completed_at = NOW()
+                        WHERE id = %s
+                    """, (str(e), job_id))
+
+                    cursor.execute("""
+                        SELECT update_jurisdiction_status(%s, %s, %s, %s)
+                    """, (jurisdiction_id, 'failed', None, str(e)))
+
+                    conn.commit()
+            except Exception as db_error:
+                logger.error(f"Failed to update job status in database: {str(db_error)}")
+
+    finally:
+        if conn:
+            conn.close()
+
 
 @app.get("/jurisdictions")
 async def list_jurisdictions(
