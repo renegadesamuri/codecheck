@@ -477,7 +477,8 @@ extension AuthService {
             case .development:
                 // For iOS Simulator, localhost works
                 // For physical device, use your Mac's IP address
-                return "http://localhost:8000"
+                // Current Mac IP: 10.0.0.214 - Updated for iPhone testing
+                return "http://10.0.0.214:8001"
             case .production:
                 return "https://api.codecheck.app" // Replace with your production URL
             case .custom(let url):

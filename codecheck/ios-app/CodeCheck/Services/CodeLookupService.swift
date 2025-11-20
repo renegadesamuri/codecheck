@@ -5,7 +5,8 @@ class CodeLookupService {
     // Configure this to match your API server
     // For local development: use your Mac's IP address (e.g., "http://192.168.1.100:8000")
     // For production: use your server's URL
-    private let baseURL = "http://localhost:8000"
+    // Current Mac IP: 10.0.0.214 - Updated for iPhone testing
+    private let baseURL = "http://10.0.0.214:8001"
 
     private let session: URLSession
     private let authService: AuthService?
