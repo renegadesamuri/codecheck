@@ -8,7 +8,7 @@ import json
 from typing import Dict, List, Optional, Any
 from fastapi import HTTPException
 import asyncio
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 
 class ClaudeService:
     """Service for Claude AI integration in the API"""
@@ -21,7 +21,7 @@ class ClaudeService:
                 detail="Claude API key not configured"
             )
         
-        self.client = Anthropic(api_key=self.api_key)
+        self.client = AsyncAnthropic(api_key=self.api_key)
         self.model = "claude-3-5-sonnet-20241022"
     
     async def extract_rules_from_text(self, section_text: str, section_ref: str, 
@@ -141,6 +141,57 @@ class ClaudeService:
                 status_code=500,
                 detail=f"Error generating conversational response: {str(e)}"
             )
+
+    async def analyze_image(self, image_data: str, media_type: str = "image/jpeg", 
+                          context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Analyze an image for building code violations using Claude Vision
+        
+        Args:
+            image_data: Base64 encoded image data
+            media_type: MIME type of the image (default: image/jpeg)
+            context: Additional context (jurisdiction, project type, etc.)
+            
+        Returns:
+            Dictionary containing analysis results (violations, confidence, etc.)
+        """
+        try:
+            prompt = self._create_image_analysis_prompt(context)
+            
+            response = await self.client.messages.create(
+                model=self.model,
+                max_tokens=4000,
+                temperature=0.2,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": image_data
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            )
+            
+            # Parse the response
+            content = response.content[0].text
+            return self._parse_analysis_response(content)
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error analyzing image: {str(e)}"
+            )
     
     def _create_rule_extraction_prompt(self, section_text: str, section_ref: str, 
                                      code_family: str, edition: str) -> str:
@@ -256,6 +307,61 @@ IMPORTANT:
             base_prompt += context_info
         
         return base_prompt
+
+    def _create_image_analysis_prompt(self, context: Dict[str, Any] = None) -> str:
+        """Create prompt for image analysis"""
+        prompt = """Analyze this construction image for potential building code violations and quality issues.
+        
+YOUR TASK:
+1. Identify specific building elements visible in the photo (e.g., framing, plumbing, electrical, stairs).
+2. Check for common code violations based on standard building codes (IRC/IBC/NEC).
+3. Assess the quality of workmanship.
+4. Provide a structured report.
+
+OUTPUT FORMAT (JSON):
+{
+  "summary": "Brief summary of what is seen",
+  "elements_detected": ["list", "of", "elements"],
+  "potential_violations": [
+    {
+      "element": "Stair Handrail",
+      "issue": "Handrail appears to be missing on open side",
+      "code_reference": "IRC R311.7.8",
+      "severity": "high",
+      "confidence": 0.9,
+      "explanation": "Open-sided walking surfaces higher than 30 inches must have a guard/handrail."
+    }
+  ],
+  "observations": [
+    "General observation about quality or safety"
+  ],
+  "overall_status": "pass" | "fail" | "warning"
+}
+
+"""
+        if context:
+            prompt += f"\nCONTEXT:\n"
+            for key, value in context.items():
+                prompt += f"- {key}: {value}\n"
+                
+        prompt += "\nReturn ONLY valid JSON."
+        return prompt
+
+    def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse Claude's image analysis response"""
+        try:
+            # Find JSON in response
+            start_idx = response_text.find('{')
+            end_idx = response_text.rfind('}') + 1
+            
+            if start_idx == -1 or end_idx == 0:
+                return {"error": "Could not parse analysis results", "raw_text": response_text}
+            
+            json_str = response_text[start_idx:end_idx]
+            return json.loads(json_str)
+            
+        except json.JSONDecodeError:
+            return {"error": "Invalid JSON in response", "raw_text": response_text}
     
     def _parse_rule_response(self, response_text: str) -> List[Dict[str, Any]]:
         """Parse Claude's rule extraction response"""

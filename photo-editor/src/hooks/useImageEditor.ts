@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState } from 'react'
+// @ts-ignore
 import { fabric } from 'fabric'
 
 export const useImageEditor = () => {
@@ -140,7 +141,7 @@ export const useImageEditor = () => {
 
     // Remove existing brightness filter
     activeObject.filters = activeObject.filters.filter(
-      filter => !(filter instanceof fabric.Image.filters.Brightness)
+      (filter: any) => !(filter instanceof fabric.Image.filters.Brightness)
     )
 
     // Add new brightness filter
@@ -160,7 +161,7 @@ export const useImageEditor = () => {
 
     // Remove existing contrast filter
     activeObject.filters = activeObject.filters.filter(
-      filter => !(filter instanceof fabric.Image.filters.Contrast)
+      (filter: any) => !(filter instanceof fabric.Image.filters.Contrast)
     )
 
     // Add new contrast filter
@@ -180,7 +181,7 @@ export const useImageEditor = () => {
 
     // Remove existing saturation filter
     activeObject.filters = activeObject.filters.filter(
-      filter => !(filter instanceof fabric.Image.filters.Saturation)
+      (filter: any) => !(filter instanceof fabric.Image.filters.Saturation)
     )
 
     // Add new saturation filter
@@ -265,6 +266,113 @@ export const useImageEditor = () => {
     }
   }, [saveState])
 
+  const addText = useCallback((text: string, options: any = {}) => {
+    if (!canvasRef.current) return
+
+    const textObj = new fabric.IText(text, {
+      left: canvasRef.current.width! / 2,
+      top: canvasRef.current.height! / 2,
+      fontSize: 40,
+      fill: '#ffffff',
+      fontFamily: 'Outfit',
+      originX: 'center',
+      originY: 'center',
+      ...options
+    })
+
+    canvasRef.current.add(textObj)
+    canvasRef.current.setActiveObject(textObj)
+    canvasRef.current.renderAll()
+    saveState()
+  }, [saveState])
+
+  const addShape = useCallback((shapeType: 'rect' | 'circle' | 'triangle') => {
+    if (!canvasRef.current) return
+
+    let shape
+    const commonOptions = {
+      left: canvasRef.current.width! / 2,
+      top: canvasRef.current.height! / 2,
+      fill: 'rgba(99, 102, 241, 0.5)',
+      stroke: '#6366f1',
+      strokeWidth: 2,
+      originX: 'center',
+      originY: 'center'
+    }
+
+    switch (shapeType) {
+      case 'rect':
+        shape = new fabric.Rect({
+          width: 100,
+          height: 100,
+          ...commonOptions
+        })
+        break
+      case 'circle':
+        shape = new fabric.Circle({
+          radius: 50,
+          ...commonOptions
+        })
+        break
+      case 'triangle':
+        shape = new fabric.Triangle({
+          width: 100,
+          height: 100,
+          ...commonOptions
+        })
+        break
+    }
+
+    if (shape) {
+      canvasRef.current.add(shape)
+      canvasRef.current.setActiveObject(shape)
+      canvasRef.current.renderAll()
+      saveState()
+    }
+  }, [saveState])
+
+  const toggleDrawingMode = useCallback((isDrawing: boolean, color: string = '#ffffff', width: number = 5) => {
+    if (!canvasRef.current) return
+
+    canvasRef.current.isDrawingMode = isDrawing
+    if (isDrawing) {
+      canvasRef.current.freeDrawingBrush = new fabric.PencilBrush(canvasRef.current)
+      canvasRef.current.freeDrawingBrush.color = color
+      canvasRef.current.freeDrawingBrush.width = width
+    }
+  }, [])
+
+  const autoEnhance = useCallback(() => {
+    if (!canvasRef.current) return
+
+    const activeObject = canvasRef.current.getActiveObject() as fabric.Image
+    // If no object selected, try to get the main image (usually the first object or background)
+    const target = activeObject || (canvasRef.current.getObjects()[0] as fabric.Image)
+    
+    if (!target || !target.filters) return
+
+    // "AI" Enhancement: Combination of brightness, contrast, and saturation
+    // Remove existing basic filters first
+    target.filters = target.filters.filter((f: any) => 
+      !(f instanceof fabric.Image.filters.Brightness) &&
+      !(f instanceof fabric.Image.filters.Contrast) &&
+      !(f instanceof fabric.Image.filters.Saturation)
+    )
+
+    target.filters.push(new fabric.Image.filters.Brightness({ brightness: 0.05 }))
+    target.filters.push(new fabric.Image.filters.Contrast({ contrast: 0.1 }))
+    target.filters.push(new fabric.Image.filters.Saturation({ saturation: 0.2 }))
+    
+    // Add a subtle sharpen
+    target.filters.push(new fabric.Image.filters.Convolute({
+      matrix: [0, -1, 0, -1, 5, -1, 0, -1, 0]
+    }))
+
+    target.applyFilters()
+    canvasRef.current.renderAll()
+    saveState()
+  }, [saveState])
+
   const undo = useCallback(() => {
     if (historyIndex > 0 && canvasRef.current) {
       const newIndex = historyIndex - 1
@@ -298,6 +406,10 @@ export const useImageEditor = () => {
     resetImage,
     undo,
     redo,
+    addText,
+    addShape,
+    toggleDrawingMode,
+    autoEnhance,
     canUndo: historyIndex > 0,
     canRedo: historyIndex < history.length - 1
   }

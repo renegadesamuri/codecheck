@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+// @ts-ignore
 import { fabric } from 'fabric'
 import './Canvas.css'
 
@@ -8,7 +9,7 @@ interface CanvasProps {
 }
 
 export const Canvas = forwardRef<fabric.Canvas, CanvasProps>(({ activeTool, onToolChange }, ref) => {
-  const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const canvasContainerRef = useRef<HTMLCanvasElement>(null)
   const canvasInstanceRef = useRef<fabric.Canvas | null>(null)
 
   useImperativeHandle(ref, () => canvasInstanceRef.current!, [])
@@ -66,21 +67,21 @@ export const Canvas = forwardRef<fabric.Canvas, CanvasProps>(({ activeTool, onTo
         })
 
         // Handle mouse events for different tools
-        canvas.on('mouse:down', (opt) => {
+        canvas.on('mouse:down', (opt: any) => {
           if (activeTool === 'crop') {
             handleCropStart(opt)
           }
         })
 
-        canvas.on('mouse:move', (opt) => {
+        canvas.on('mouse:move', (opt: any) => {
           if (activeTool === 'crop') {
             handleCropMove(opt)
           }
         })
 
-        canvas.on('mouse:up', (opt) => {
+        canvas.on('mouse:up', () => {
           if (activeTool === 'crop') {
-            handleCropEnd(opt)
+            handleCropEnd()
           }
         })
       } catch (error) {
@@ -148,7 +149,7 @@ export const Canvas = forwardRef<fabric.Canvas, CanvasProps>(({ activeTool, onTo
     canvas.renderAll()
   }
 
-  const handleCropEnd = (opt: fabric.IEvent) => {
+  const handleCropEnd = () => {
     const canvas = canvasInstanceRef.current
     if (!canvas) return
 

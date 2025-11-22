@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react'
-import { Upload, Download, RotateCw, Crop, Palette, Zap, Settings, Image as ImageIcon } from 'lucide-react'
+import { useState, useRef, useCallback } from 'react'
+import { Upload, Download, RotateCw, Crop, Zap, Image as ImageIcon, Type, Square, PenTool, Wand2, Layers } from 'lucide-react'
 import { Canvas } from './components/Canvas'
 import { Toolbar } from './components/Toolbar'
 import { Sidebar } from './components/Sidebar'
@@ -10,7 +10,7 @@ import './App.css'
 function App() {
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [activeTool, setActiveTool] = useState<string>('select')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
@@ -26,48 +26,32 @@ function App() {
     resetImage,
     undo,
     redo,
+    addText,
+    addShape,
+    toggleDrawingMode,
+    autoEnhance,
     canUndo,
     canRedo
   } = useImageEditor()
 
   const handleImageUpload = useCallback((file: File) => {
-    console.log('Starting image upload for:', file.name)
     const reader = new FileReader()
     reader.onload = (e) => {
-      console.log('File read successfully, creating image...')
       const img = new Image()
-      img.crossOrigin = 'anonymous' // Handle CORS if needed
+      img.crossOrigin = 'anonymous'
       img.onload = () => {
-        console.log('Image loaded successfully, dimensions:', img.naturalWidth, 'x', img.naturalHeight)
-        
-        // Wait for canvas to be ready
-        let attempts = 0
-        const maxAttempts = 50 // 5 seconds max wait
+        // Wait for canvas
         const waitForCanvas = () => {
-          attempts++
           if (canvasRef.current) {
-            console.log('Canvas is ready, loading image...')
             loadImage(img)
             setIsImageLoaded(true)
-          } else if (attempts < maxAttempts) {
-            console.log(`Canvas not ready yet, waiting... (attempt ${attempts}/${maxAttempts})`)
-            setTimeout(waitForCanvas, 100)
           } else {
-            console.error('Canvas failed to initialize after 5 seconds')
-            alert('Failed to initialize canvas. Please refresh the page and try again.')
+            setTimeout(waitForCanvas, 100)
           }
         }
         waitForCanvas()
       }
-      img.onerror = (error) => {
-        console.error('Failed to load image:', error)
-        alert('Failed to load image. Please try a different file.')
-      }
       img.src = e.target?.result as string
-    }
-    reader.onerror = (error) => {
-      console.error('Failed to read file:', error)
-      alert('Failed to read file. Please try again.')
     }
     reader.readAsDataURL(file)
   }, [loadImage])
@@ -78,13 +62,24 @@ function App() {
 
   const tools = [
     { id: 'select', icon: 'cursor', label: 'Select' },
+    { id: 'enhance', icon: Wand2, label: 'AI Enhance' },
+    { id: 'text', icon: Type, label: 'Text' },
+    { id: 'shapes', icon: Square, label: 'Shapes' },
+    { id: 'draw', icon: PenTool, label: 'Draw' },
     { id: 'crop', icon: Crop, label: 'Crop' },
     { id: 'rotate', icon: RotateCw, label: 'Rotate' },
-    { id: 'brightness', icon: Zap, label: 'Brightness' },
-    { id: 'contrast', icon: Palette, label: 'Contrast' },
-    { id: 'saturation', icon: Palette, label: 'Saturation' },
+    { id: 'brightness', icon: Zap, label: 'Adjust' },
     { id: 'filters', icon: ImageIcon, label: 'Filters' }
   ]
+
+  const handleToolSelect = (toolId: string) => {
+    setActiveTool(toolId)
+    setSidebarOpen(true)
+    
+    if (toolId === 'enhance') {
+      autoEnhance()
+    }
+  }
 
   return (
     <div className="app">
@@ -92,7 +87,9 @@ function App() {
       <header className="app-header glass">
         <div className="header-content">
           <div className="logo">
-            <ImageIcon size={24} />
+            <div style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', padding: '8px', borderRadius: '8px' }}>
+              <Layers size={24} color="white" />
+            </div>
             <h1>Photo Editor Pro</h1>
           </div>
           
@@ -112,8 +109,8 @@ function App() {
               className="btn btn-primary"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={16} />
-              Upload Image
+              <Upload size={18} />
+              Upload
             </button>
             
             {isImageLoaded && (
@@ -121,7 +118,7 @@ function App() {
                 className="btn btn-secondary"
                 onClick={handleExport}
               >
-                <Download size={16} />
+                <Download size={18} />
                 Export
               </button>
             )}
@@ -130,24 +127,25 @@ function App() {
       </header>
 
       <div className="app-body">
-        {/* Toolbar */}
-        <Toolbar
-          tools={tools}
-          activeTool={activeTool}
-          onToolSelect={setActiveTool}
-          onUndo={undo}
-          onRedo={redo}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onReset={resetImage}
-        />
-
-        {/* Main Content */}
         <div className="main-content">
+          {/* Toolbar */}
+          <Toolbar
+            tools={tools}
+            activeTool={activeTool}
+            onToolSelect={handleToolSelect}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onReset={resetImage}
+          />
+
           {/* Canvas Area */}
           <div className="canvas-container">
             {!isImageLoaded ? (
-              <ImageUpload onImageUpload={handleImageUpload} />
+              <div className="loading-container">
+                <ImageUpload onImageUpload={handleImageUpload} />
+              </div>
             ) : (
               <Canvas
                 ref={canvasRef}
@@ -169,6 +167,9 @@ function App() {
               onApplyFilter={applyFilter}
               onRotate={rotateImage}
               onCrop={cropImage}
+              onAddText={addText}
+              onAddShape={addShape}
+              onToggleDrawing={toggleDrawingMode}
             />
           )}
         </div>

@@ -136,6 +136,38 @@ class ComplianceResult(BaseModel):
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+class ImageAnalysisRequest(BaseModel):
+    image_base64: str
+    media_type: str = "image/jpeg"
+    context: Optional[Dict[str, Any]] = None
+
+# AR Measurement Models
+class Point3D(BaseModel):
+    x: float
+    y: float
+    z: float
+
+class ARMeasurement(BaseModel):
+    id: str
+    type: str  # e.g., "distance", "area", "volume", "angle"
+    value: float
+    unit: str
+    start_point: Optional[Point3D] = None
+    end_point: Optional[Point3D] = None
+    confidence: float
+    label: Optional[str] = None  # e.g., "stair_riser", "door_width"
+
+class ARSessionRequest(BaseModel):
+    jurisdiction_id: str
+    measurements: List[ARMeasurement]
+    project_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class ARSessionResponse(BaseModel):
+    session_id: str
+    compliance_results: List[Dict[str, Any]]
+    overall_status: str
+
 # Helper function to get user from database
 def get_user_from_db(conn, email: str) -> Optional[Dict]:
     """Get user from database by email"""
@@ -1387,6 +1419,193 @@ async def list_jurisdictions(
             return {"jurisdictions": jurisdictions}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.post("/analyze/image")
+#@limiter.limit("5/minute")
+async def analyze_image(
+    request: Request,
+    analysis_request: ImageAnalysisRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Analyze an image for building code violations
+    Requires authentication
+    Rate limited to 5 requests per minute
+    """
+    # Validate base64 string (basic check)
+    if not analysis_request.image_base64 or len(analysis_request.image_base64) < 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image data"
+        )
+
+    conn = get_db_connection()
+    try:
+        # Check Claude API rate limit
+        if not ClaudeRateLimiter.check_claude_rate_limit(conn, current_user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Claude API rate limit exceeded. Please try again later."
+            )
+
+        # Log Claude API request
+        ClaudeRateLimiter.log_claude_request(conn, current_user.user_id)
+
+        # Analyze image
+        claude = get_claude_service()
+        result = await claude.analyze_image(
+            analysis_request.image_base64,
+            analysis_request.media_type,
+            analysis_request.context
+        )
+
+        # Log the analysis
+        AuditLogger.log_event(
+            conn,
+            user_id=current_user.user_id,
+            action="image_analysis",
+            ip_address=request.client.host if request.client else None,
+            details={"status": result.get("overall_status", "unknown")}
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.post("/measurements/ar", response_model=ARSessionResponse)
+async def process_ar_session(
+    request: Request,
+    session_request: ARSessionRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Process AR measurements and check compliance
+    Requires authentication
+    """
+    # Validate jurisdiction_id
+    if not InputValidator.validate_uuid(session_request.jurisdiction_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid jurisdiction ID format"
+        )
+
+    conn = get_db_connection()
+    try:
+        session_id = str(uuid.uuid4())
+        compliance_results = []
+        overall_status = "pass"
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # 1. Create AR Session
+            cursor.execute("""
+                INSERT INTO ar_sessions (id, user_id, jurisdiction_id, project_id, notes, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """, (
+                session_id, 
+                current_user.user_id, 
+                session_request.jurisdiction_id, 
+                session_request.project_id, 
+                session_request.notes
+            ))
+
+            # 2. Process Measurements
+            for m in session_request.measurements:
+                # Store measurement
+                cursor.execute("""
+                    INSERT INTO ar_measurements (
+                        id, session_id, type, value, unit, 
+                        start_point_x, start_point_y, start_point_z,
+                        end_point_x, end_point_y, end_point_z,
+                        confidence, label
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    m.id, session_id, m.type, m.value, m.unit,
+                    m.start_point.x if m.start_point else None,
+                    m.start_point.y if m.start_point else None,
+                    m.start_point.z if m.start_point else None,
+                    m.end_point.x if m.end_point else None,
+                    m.end_point.y if m.end_point else None,
+                    m.end_point.z if m.end_point else None,
+                    m.confidence, m.label
+                ))
+
+                # 3. Check Compliance (if label matches a known rule category)
+                if m.label:
+                    # Map label to category (simple mapping for now)
+                    category_map = {
+                        "stair_riser": "stairs.riser",
+                        "stair_tread": "stairs.tread",
+                        "door_width": "doors.width",
+                        "guard_height": "railings.height"
+                    }
+                    category = category_map.get(m.label)
+                    
+                    if category:
+                        # Fetch rule
+                        cursor.execute("""
+                            SELECT id, rule_json, confidence 
+                            FROM rule 
+                            WHERE jurisdiction_id = %s 
+                            AND rule_json->>'category' = %s
+                            ORDER BY confidence DESC LIMIT 1
+                        """, (session_request.jurisdiction_id, category))
+                        
+                        rule = cursor.fetchone()
+                        if rule:
+                            rule_data = rule['rule_json']
+                            req_type = rule_data.get('requirement')
+                            req_value = rule_data.get('value')
+                            
+                            is_compliant = True
+                            msg = "Compliant"
+                            
+                            if req_type == 'min' and m.value < req_value:
+                                is_compliant = False
+                                msg = f"Too small (min {req_value} {rule_data.get('unit')})"
+                            elif req_type == 'max' and m.value > req_value:
+                                is_compliant = False
+                                msg = f"Too large (max {req_value} {rule_data.get('unit')})"
+                                
+                            if not is_compliant:
+                                overall_status = "fail"
+                                
+                            compliance_results.append({
+                                "measurement_id": m.id,
+                                "label": m.label,
+                                "is_compliant": is_compliant,
+                                "message": msg,
+                                "rule_id": rule['id']
+                            })
+
+            conn.commit()
+
+        # Log event
+        AuditLogger.log_event(
+            conn,
+            user_id=current_user.user_id,
+            action="ar_session_processed",
+            details={"session_id": session_id, "measurements_count": len(session_request.measurements)}
+        )
+
+        return ARSessionResponse(
+            session_id=session_id,
+            compliance_results=compliance_results,
+            overall_status=overall_status
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
