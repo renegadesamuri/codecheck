@@ -20,10 +20,14 @@
 		AA0000210000000000000001 /* MeasurementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000220000000000000001 /* MeasurementView.swift */; };
 		AA0000230000000000000001 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000240000000000000001 /* ConversationView.swift */; };
 		AA0000250000000000000001 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000260000000000000001 /* ProjectsView.swift */; };
+		AA0000510000000000000001 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000500000000000000001 /* AuthService.swift */; };
+		AA0000530000000000000001 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000520000000000000001 /* LocationService.swift */; };
+		AA0000550000000000000001 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000540000000000000001 /* AuthView.swift */; };
+		AA0000570000000000000001 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000560000000000000001 /* LoginView.swift */; };
+		AA0000590000000000000001 /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000580000000000000001 /* RegisterView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		AA0000270000000000000001 /* CodeCheck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeCheck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000020000000000000001 /* CodeCheckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCheckApp.swift; sourceTree = "<group>"; };
 		AA0000040000000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0000060000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -37,7 +41,13 @@
 		AA0000220000000000000001 /* MeasurementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementView.swift; sourceTree = "<group>"; };
 		AA0000240000000000000001 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		AA0000260000000000000001 /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
+		AA0000270000000000000001 /* CodeCheck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeCheck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000280000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0000500000000000000001 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		AA0000520000000000000001 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		AA0000540000000000000001 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		AA0000560000000000000001 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		AA0000580000000000000001 /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +99,9 @@
 				AA0000220000000000000001 /* MeasurementView.swift */,
 				AA0000240000000000000001 /* ConversationView.swift */,
 				AA0000260000000000000001 /* ProjectsView.swift */,
+				AA0000540000000000000001 /* AuthView.swift */,
+				AA0000560000000000000001 /* LoginView.swift */,
+				AA0000580000000000000001 /* RegisterView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -100,6 +113,8 @@
 				AA0000120000000000000001 /* ConversationManager.swift */,
 				AA0000140000000000000001 /* CodeLookupService.swift */,
 				AA0000160000000000000001 /* ProjectManager.swift */,
+				AA0000500000000000000001 /* AuthService.swift */,
+				AA0000520000000000000001 /* LocationService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -201,6 +216,11 @@
 				AA0000210000000000000001 /* MeasurementView.swift in Sources */,
 				AA0000230000000000000001 /* ConversationView.swift in Sources */,
 				AA0000250000000000000001 /* ProjectsView.swift in Sources */,
+				AA0000510000000000000001 /* AuthService.swift in Sources */,
+				AA0000530000000000000001 /* LocationService.swift in Sources */,
+				AA0000550000000000000001 /* AuthView.swift in Sources */,
+				AA0000570000000000000001 /* LoginView.swift in Sources */,
+				AA0000590000000000000001 /* RegisterView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -334,7 +354,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"CodeCheck/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CodeCheck/Info.plist;
@@ -366,7 +386,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"CodeCheck/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CodeCheck/Info.plist;
@@ -415,5 +435,3 @@
 	};
 	rootObject = AA0000410000000000000001 /* Project object */;
 }
-
-

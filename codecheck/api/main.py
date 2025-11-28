@@ -19,7 +19,8 @@ from auth import (
     UserCreate, UserLogin, Token, User, TokenData,
     get_current_user, get_current_admin_user, get_current_user_optional,
     get_password_hash, verify_password, validate_password_strength,
-    create_access_token, create_refresh_token, decode_token
+    create_access_token, create_refresh_token, decode_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from security import (
     SecurityHeadersMiddleware, InputValidator, AuditLogger,
@@ -168,6 +169,10 @@ class ARSessionResponse(BaseModel):
     compliance_results: List[Dict[str, Any]]
     overall_status: str
 
+class ConversationResponse(BaseModel):
+    response: str
+    suggestions: Optional[List[str]] = None
+
 # Helper function to get user from database
 def get_user_from_db(conn, email: str) -> Optional[Dict]:
     """Get user from database by email"""
@@ -271,7 +276,16 @@ async def register(request: Request, user_data: UserCreate):
         return Token(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer"
+            token_type="bearer",
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=User(
+                id=new_user['id'],
+                email=new_user['email'],
+                full_name=new_user['full_name'],
+                role=new_user['role'],
+                is_active=True,
+                created_at=new_user['created_at']
+            )
         )
 
     except HTTPException:
@@ -343,7 +357,16 @@ async def login(request: Request, credentials: UserLogin):
         return Token(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer"
+            token_type="bearer",
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=User(
+                id=user['id'],
+                email=user['email'],
+                full_name=user['full_name'],
+                role=user['role'],
+                is_active=user['is_active'],
+                created_at=user['created_at']
+            )
         )
 
     except HTTPException:
@@ -400,7 +423,16 @@ async def refresh_token(request: Request, refresh_request: RefreshTokenRequest):
         return Token(
             access_token=access_token,
             refresh_token=new_refresh_token,
-            token_type="bearer"
+            token_type="bearer",
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=User(
+                id=user['id'],
+                email=user['email'],
+                full_name=user['full_name'],
+                role=user['role'],
+                is_active=user['is_active'],
+                created_at=user['created_at']
+            )
         )
 
     except HTTPException:
@@ -843,11 +875,10 @@ async def conversational_ai(
             details={"message_length": len(message)}
         )
 
-        return {
-            "message": message,
-            "response": response,
-            "timestamp": datetime.now().isoformat()
-        }
+        return ConversationResponse(
+            response=response,
+            suggestions=["Ask about specific dimensions", "Check compliance for a project"]
+        )
 
     except HTTPException:
         raise

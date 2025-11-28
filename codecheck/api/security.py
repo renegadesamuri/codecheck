@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import re
+import json
 
 # Rate limiter configuration
 limiter = Limiter(
@@ -144,7 +145,7 @@ class AuditLogger:
                 cursor.execute("""
                     INSERT INTO audit_log (user_id, action, resource_type, resource_id, ip_address, user_agent, details)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (user_id, action, resource_type, resource_id, ip_address, user_agent, details))
+                """, (user_id, action, resource_type, resource_id, ip_address, user_agent, json.dumps(details) if details else None))
                 conn.commit()
         except Exception as e:
             # Don't fail the request if logging fails

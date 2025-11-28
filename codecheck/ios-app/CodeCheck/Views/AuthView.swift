@@ -4,6 +4,7 @@ struct AuthView: View {
     @EnvironmentObject var authService: AuthService
     @State private var showingLogin = true
     @State private var showingBiometricPrompt = false
+    @State private var showingDebugSettings = false
 
     var body: some View {
         ZStack {
@@ -47,6 +48,18 @@ struct AuthView: View {
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
+                        
+                        // Debug settings button
+                        Button {
+                            showingDebugSettings = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gear")
+                                Text("Server Settings")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
                     }
                     .padding(.bottom, 24)
 
@@ -143,6 +156,10 @@ struct AuthView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
+            .sheet(isPresented: $showingDebugSettings) {
+                ServerSettingsView()
+                    .presentationDetents([.medium])
+            }
 
             // Loading overlay
             if authService.isLoading {
@@ -170,4 +187,94 @@ struct AuthView: View {
 #Preview {
     AuthView()
         .environmentObject(AuthService())
+}
+
+// MARK: - Server Settings View
+struct ServerSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("customServerURL") private var customServerURL = ""
+    @AppStorage("useCustomServer") private var useCustomServer = false
+    @State private var tempURL = ""
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Current Server")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(useCustomServer && !customServerURL.isEmpty ? customServerURL : "Default (localhost:8001 / .local)")
+                        .font(.footnote)
+                        .foregroundColor(.primary)
+                } header: {
+                    Text("Active Configuration")
+                }
+                
+                Section {
+                    Toggle("Use Custom Server URL", isOn: $useCustomServer)
+                    
+                    if useCustomServer {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Server URL")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            TextField("http://192.168.1.100:8001", text: $tempURL)
+                                .textContentType(.URL)
+                                .keyboardType(.URL)
+                                .autocapitalization(.none)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        
+                        Button("Save URL") {
+                            customServerURL = tempURL
+                        }
+                        .disabled(tempURL.isEmpty)
+                    }
+                } header: {
+                    Text("Configuration")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Examples:")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("• http://localhost:8001 (Simulator)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("• http://192.168.1.XXX:8001 (Device)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("• http://MacBook-Pro.local:8001 (Hostname)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Section {
+                    Button("Get My Mac's IP Address Help") {
+                        // This could open a help view or show instructions
+                    }
+                } header: {
+                    Text("Need Help?")
+                } footer: {
+                    Text("On Mac: System Settings > Network > Your Connection > Details")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Server Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                tempURL = customServerURL
+            }
+        }
+    }
 }

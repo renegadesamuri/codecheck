@@ -77,18 +77,28 @@ class MeasurementEngine: NSObject, ObservableObject {
 
     private func performFeaturePointRaycast(at location: CGPoint) {
         // Get camera transform
-        guard let currentFrame = arView.session.currentFrame else { return }
+        guard arView.session.currentFrame != nil else { return }
 
-        let camera = currentFrame.camera
-
-        // Create a ray from the camera through the screen point
-        let point = arView.center
-        let cameraTransform = camera.transform
-
-        // Perform hit test using feature points
-        let hitTestResults = currentFrame.hitTest(location, types: .featurePoint)
-
-        if let result = hitTestResults.first {
+        // Try to create a raycast query for existing plane geometry
+        if let query = arView.makeRaycastQuery(from: location, 
+                                               allowing: .existingPlaneGeometry, 
+                                               alignment: .any) {
+            performRaycast(with: query)
+            return
+        }
+        
+        // If plane geometry isn't available, try estimated planes
+        if let estimatedQuery = arView.makeRaycastQuery(from: location, 
+                                                        allowing: .estimatedPlane, 
+                                                        alignment: .any) {
+            performRaycast(with: estimatedQuery)
+        }
+    }
+    
+    private func performRaycast(with query: ARRaycastQuery) {
+        let results = arView.session.raycast(query)
+        
+        if let result = results.first {
             let position = SIMD3<Float>(
                 result.worldTransform.columns.3.x,
                 result.worldTransform.columns.3.y,

@@ -208,7 +208,7 @@ struct MeasurementResultView: View {
     @State private var isLoadingCodes = false
     @State private var loadingProgress: Int = 0
     @State private var loadingMessage: String = ""
-    @State private var loadingTask: Task<Void, Never>?
+    @State private var loadingTask: Task<Void, Error>?
 
     private let codeLookupService = CodeLookupService()
     private let locationService = LocationService()

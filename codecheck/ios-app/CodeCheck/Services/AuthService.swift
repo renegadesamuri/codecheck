@@ -18,16 +18,24 @@ class AuthService: ObservableObject {
     private var tokenExpirationDate: Date?
 
     // Token storage keys
-    private let accessTokenKey = "com.codecheck.accessToken"
-    private let refreshTokenKey = "com.codecheck.refreshToken"
-    private let tokenExpirationKey = "com.codecheck.tokenExpiration"
+    private let accessTokenKey = "com.getcodecheck.accessToken"
+    private let refreshTokenKey = "com.getcodecheck.refreshToken"
+    private let tokenExpirationKey = "com.getcodecheck.tokenExpiration"
 
     // MARK: - Initialization
     init(environment: Environment = .development) {
-        self.baseURL = environment.baseURL
+        // Check for custom server URL from settings
+        let useCustomServer = UserDefaults.standard.bool(forKey: "useCustomServer")
+        let customServerURL = UserDefaults.standard.string(forKey: "customServerURL")
+        
+        if useCustomServer, let customURL = customServerURL, !customURL.isEmpty {
+            self.baseURL = customURL
+        } else {
+            self.baseURL = environment.baseURL
+        }
 
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForRequest = 60
         configuration.timeoutIntervalForResource = 60
         configuration.waitsForConnectivity = true
         self.session = URLSession(configuration: configuration)
@@ -44,8 +52,8 @@ class AuthService: ObservableObject {
 
     func checkAuthStatus() async {
         // Check if we have tokens stored
-        guard let accessToken = keychain.get(accessTokenKey),
-              let refreshToken = keychain.get(refreshTokenKey) else {
+        guard let _ = keychain.get(accessTokenKey),
+              let storedRefreshToken = keychain.get(refreshTokenKey) else {
             return
         }
 
@@ -58,7 +66,7 @@ class AuthService: ObservableObject {
             // If token expired, try to refresh
             if expirationDate < Date() {
                 do {
-                    try await refreshAccessToken(using: refreshToken)
+                    try await refreshAccessToken(using: storedRefreshToken)
                 } catch {
                     await logout()
                     return
@@ -84,6 +92,8 @@ class AuthService: ObservableObject {
 
         do {
             let endpoint = "\(baseURL)/auth/login"
+            
+            print("🔐 Attempting login to: \(endpoint)")
 
             guard let url = URL(string: endpoint) else {
                 throw AuthenticationError.invalidURL
@@ -100,13 +110,56 @@ class AuthService: ObservableObject {
             let (data, response) = try await session.data(for: request)
             try handleAuthResponse(data: data, response: response)
 
+            print("✅ Login successful")
             isLoading = false
         } catch let error as AuthenticationError {
+            print("❌ Auth error: \(error.errorDescription ?? "Unknown")")
             errorMessage = error.errorDescription
             isLoading = false
         } catch {
-            errorMessage = AuthenticationError.networkError(error).errorDescription
+            print("❌ Network error: \(error.localizedDescription)")
+            let nsError = error as NSError
+            print("❌ Detailed error: \(nsError)")
+            if nsError.domain == NSURLErrorDomain {
+                if nsError.code == NSURLErrorCannotConnectToHost {
+                    errorMessage = "Cannot connect to server. Make sure the backend is running."
+                } else if nsError.code == NSURLErrorTimedOut {
+                    errorMessage = "Connection timed out. Check your network connection."
+                } else {
+                    errorMessage = "Network error: \(nsError.localizedDescription)"
+                }
+            } else {
+                errorMessage = AuthenticationError.networkError(error).errorDescription
+            }
             isLoading = false
+        }
+    }
+
+    // MARK: - Demo Mode
+
+    func loginAsDemo() {
+        print("🚀 Entering Demo Mode")
+        
+        // Create a dummy user using manual property assignment
+        // Since User only has a decoder init, we need to decode from data
+        let demoUserJSON = """
+        {
+            "id": "demo-user-id",
+            "email": "demo@example.com",
+            "full_name": "Demo User",
+            "role": "user",
+            "is_active": true,
+            "created_at": "\(ISO8601DateFormatter().string(from: Date()))"
+        }
+        """
+        
+        if let jsonData = demoUserJSON.data(using: .utf8),
+           let demoUser = try? JSONDecoder().decode(User.self, from: jsonData) {
+            self.currentUser = demoUser
+            self.isAuthenticated = true
+            self.errorMessage = nil
+        } else {
+            print("❌ Failed to create demo user")
         }
     }
 
@@ -345,6 +398,91 @@ class AuthService: ObservableObject {
         }
     }
 
+    // MARK: - Connection Testing
+    
+    /// Test connection to the server
+    func testConnection() async -> (success: Bool, message: String, details: String) {
+        let endpoint = "\(baseURL)/"
+        
+        print("🔌 Testing connection to: \(endpoint)")
+        
+        guard let url = URL(string: endpoint) else {
+            return (false, "Invalid URL", "The server URL is malformed: \(baseURL)")
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        do {
+            let (_, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return (false, "Invalid Response", "Received non-HTTP response")
+            }
+            
+            let statusCode = httpResponse.statusCode
+            
+            if (200...299).contains(statusCode) {
+                print("✅ Connection successful! Status: \(statusCode)")
+                return (true, "Connected!", "Server is reachable at \(baseURL)\nStatus: \(statusCode)")
+            } else {
+                print("⚠️ Server responded with status: \(statusCode)")
+                return (false, "Server Error", "Server responded with status code: \(statusCode)")
+            }
+            
+        } catch let error as NSError {
+            print("❌ Connection failed: \(error)")
+            
+            // Detailed error analysis
+            if error.domain == NSURLErrorDomain {
+                switch error.code {
+                case NSURLErrorCannotConnectToHost:
+                    return (false, "Cannot Connect", 
+                           "Unable to reach server at \(baseURL)\n\n" +
+                           "Possible causes:\n" +
+                           "• Backend server is not running\n" +
+                           "• Wrong IP address or port\n" +
+                           "• Device not on same network as server")
+                    
+                case NSURLErrorTimedOut:
+                    return (false, "Connection Timed Out",
+                           "Server at \(baseURL) is not responding\n\n" +
+                           "Possible causes:\n" +
+                           "• Backend server is too slow or hung\n" +
+                           "• Network connectivity issues\n" +
+                           "• Firewall blocking the connection")
+                    
+                case NSURLErrorCannotFindHost:
+                    return (false, "Cannot Find Host",
+                           "Could not resolve hostname\n\n" +
+                           "Try using IP address instead:\n" +
+                           "• Simulator: http://localhost:8001\n" +
+                           "• Device: http://192.168.1.XXX:8001")
+                    
+                case NSURLErrorAppTransportSecurityRequiresSecureConnection:
+                    return (false, "ATS Blocking HTTP",
+                           "App Transport Security is blocking HTTP\n\n" +
+                           "Fix: Add NSAppTransportSecurity to Info.plist\n" +
+                           "Set NSAllowsLocalNetworking to YES")
+                    
+                case NSURLErrorNetworkConnectionLost:
+                    return (false, "Network Lost",
+                           "Network connection was lost\n\n" +
+                           "Check your WiFi connection")
+                    
+                default:
+                    return (false, "Network Error",
+                           "Error: \(error.localizedDescription)\n" +
+                           "Code: \(error.code)\n" +
+                           "Domain: \(error.domain)")
+                }
+            }
+            
+            return (false, "Unknown Error", error.localizedDescription)
+        }
+    }
+    
     // MARK: - Authenticated Requests
 
     /// Make an authenticated API request
@@ -413,8 +551,8 @@ class AuthService: ObservableObject {
         case 200...299:
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            decoder.dateDecodingStrategy = .iso8601
 
+            // Dates are now handled in the User model's custom init
             let authResponse = try decoder.decode(AuthResponse.self, from: data)
 
             // Store tokens securely
@@ -475,12 +613,19 @@ extension AuthService {
         var baseURL: String {
             switch self {
             case .development:
-                // For iOS Simulator, localhost works
-                // For physical device, use your Mac's IP address
-                // Current Mac IP: 10.0.0.214 - Updated for iPhone testing
-                return "http://10.0.0.214:8001"
+                // Try these in order if connection fails:
+                // 1. For iOS Simulator: "http://localhost:8001"
+                // 2. For physical device, use your Mac's IP address: "http://192.168.1.XXX:8001"
+                // 3. Or use your Mac's hostname: "http://MacBook-Pro.local:8001"
+                #if targetEnvironment(simulator)
+                return "http://localhost:8001"
+                #else
+                // For physical device, you may need to change this to your Mac's IP address
+                return "http://10.0.0.214"  // UPDATE THIS WITH YOUR MAC'S IP
+                #endif
             case .production:
-                return "https://api.codecheck.app" // Replace with your production URL
+                // TODO: Replace with your actual Render Web Service URL (starts with https://)
+                return "https://codecheck-api.onrender.com" 
             case .custom(let url):
                 return url
             }
@@ -541,7 +686,7 @@ enum AuthenticationError: LocalizedError {
 
 // MARK: - Keychain Wrapper
 class KeychainWrapper {
-    private let serviceName = "com.codecheck.app"
+    private let serviceName = "com.getcodecheck.app"
 
     /// Save a value to the keychain
     func set(_ value: String, forKey key: String) {
@@ -608,3 +753,4 @@ class KeychainWrapper {
         SecItemDelete(query as CFDictionary)
     }
 }
+

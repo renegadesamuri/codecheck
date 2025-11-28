@@ -34,16 +34,6 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-class Token(BaseModel):
-    access_token: str
-    refresh_token: Optional[str] = None
-    token_type: str = "bearer"
-
-class TokenData(BaseModel):
-    user_id: Optional[str] = None
-    email: Optional[str] = None
-    role: Optional[str] = "user"
-
 class User(BaseModel):
     id: str
     email: str
@@ -51,6 +41,20 @@ class User(BaseModel):
     role: str = "user"
     is_active: bool = True
     created_at: datetime
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str = "bearer"
+    expires_in: int
+    user: "User"
+
+class TokenData(BaseModel):
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = "user"
+
+
 
 # Password utilities
 def verify_password(plain_password: str, hashed_password: str) -> bool:

@@ -208,15 +208,37 @@ struct User: Codable, Identifiable {
     let id: String
     let email: String
     let name: String?
-    let createdAt: Date?
-    let emailVerified: Bool?
+    let role: String?
+    let isActive: Bool?
+
+    // Make createdAt optional and use custom init to handle date parsing gracefully
+    var createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id
         case email
-        case name
+        case name = "full_name"
+        case role
+        case isActive = "is_active"
         case createdAt = "created_at"
-        case emailVerified = "email_verified"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        email = try container.decode(String.self, forKey: .email)
+        name = try? container.decode(String.self, forKey: .name)
+        role = try? container.decode(String.self, forKey: .role)
+        isActive = try? container.decode(Bool.self, forKey: .isActive)
+
+        // Try to decode date, but don't fail if it doesn't work
+        if let dateString = try? container.decode(String.self, forKey: .createdAt) {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            createdAt = formatter.date(from: dateString)
+        } else {
+            createdAt = nil
+        }
     }
 }
 

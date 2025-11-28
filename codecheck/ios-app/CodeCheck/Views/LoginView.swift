@@ -158,6 +158,16 @@ struct LoginView: View {
             .disabled(!isFormValid() || authService.isLoading)
             .padding(.horizontal)
             .padding(.top, 8)
+
+            // Demo Mode Button
+            Button {
+                authService.loginAsDemo()
+            } label: {
+                Text("Skip Login (Demo Mode)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 8)
         }
         .animation(.easeInOut(duration: 0.2), value: emailError)
         .animation(.easeInOut(duration: 0.2), value: passwordError)
