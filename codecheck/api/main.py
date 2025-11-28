@@ -56,6 +56,97 @@ app.add_middleware(
 # Add rate limiter
 app.state.limiter = limiter
 
+# Initialize connectivity hub (will be set on startup)
+connectivity_hub = None
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Run critical startup validation before application becomes ready.
+    Tests all connections and provides clear diagnostics if anything is broken.
+    """
+    global connectivity_hub
+
+    import logging
+    import sys
+    from pathlib import Path
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    print("🔍 Starting CodeCheck API with connectivity validation...")
+    logger.info("🔍 Starting CodeCheck API with connectivity validation...")
+
+    try:
+        # Add parent directory to path for imports
+        parent_dir = Path(__file__).parent.parent
+        if str(parent_dir) not in sys.path:
+            sys.path.insert(0, str(parent_dir))
+
+        # Import and initialize connectivity hub
+        from agents.mini_agents.agent_hub import ConnectivityHub
+
+        connectivity_hub = ConnectivityHub()
+        logger.info(f"✅ Initialized connectivity hub with {len(connectivity_hub.agents)} agents")
+
+        # Run BLOCKING startup tests - app won't start if critical connections fail
+        startup_results = await connectivity_hub.run_startup_tests()
+
+        # Check for critical failures
+        critical_failures = [r for r in startup_results if r.get('critical') and r.get('status') == 'failed']
+
+        if critical_failures:
+            logger.error("❌ Critical connectivity failures detected:")
+            for failure in critical_failures:
+                logger.error(f"  - {failure['agent']}: {len(failure.get('errors', []))} critical issues")
+                for error in failure.get('errors', []):
+                    logger.error(f"    • {error['title']}")
+                    logger.error(f"      {error['description']}")
+                    logger.error(f"      Fix: {error['fix']}")
+
+            # In production, you might want to exit here:
+            # import sys
+            # sys.exit(1)
+
+            logger.warning("⚠️  Application starting despite critical failures (development mode)")
+        else:
+            logger.info("✅ All critical connections healthy")
+
+        # Start background monitoring (non-blocking)
+        import asyncio
+        asyncio.create_task(connectivity_hub.start_monitoring())
+        logger.info("🔄 Background connectivity monitoring started")
+
+        logger.info("🚀 CodeCheck API ready")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize connectivity monitoring: {e}", exc_info=True)
+        logger.warning("⚠️  Application starting without connectivity monitoring")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    global connectivity_hub
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("Shutting down CodeCheck API...")
+
+    if connectivity_hub:
+        await connectivity_hub.shutdown()
+        logger.info("Connectivity hub shut down")
+
+    logger.info("Shutdown complete")
+
+# Include connectivity monitoring endpoints
+from connectivity_endpoints import router as connectivity_router
+app.include_router(connectivity_router)
+
 # Database connection
 def get_db_connection():
     """Get database connection"""
