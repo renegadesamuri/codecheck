@@ -16,6 +16,7 @@ from datetime import datetime
 from .base_agent import BaseAgent, AgentResult, FindingSeverity
 from .connection_tester import ConnectionTesterAgent
 from .config_validator import ConfigValidatorAgent
+from .auth_flow_tester import AuthFlowTesterAgent
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,9 @@ class ConnectivityHub:
 
         # Config Validator (non-critical, but important)
         self.agents['config_validator'] = ConfigValidatorAgent()
+
+        # Auth Flow Tester (security validation)
+        self.agents['auth_flow_tester'] = AuthFlowTesterAgent()
 
         logger.info(f"Registered {len(self.agents)} agents")
 
