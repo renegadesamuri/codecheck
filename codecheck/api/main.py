@@ -3,6 +3,10 @@ CodeCheck API
 FastAPI backend for construction compliance system with authentication and security
 """
 
+# Load environment variables FIRST (before any other imports that use them)
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel

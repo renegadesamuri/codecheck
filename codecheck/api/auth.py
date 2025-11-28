@@ -13,7 +13,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
 # Security configuration
-SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'CHANGE-THIS-IN-PRODUCTION-USE-LONG-RANDOM-STRING')
+_jwt_secret = os.getenv('JWT_SECRET_KEY')
+if not _jwt_secret:
+    import warnings
+    warnings.warn(
+        "JWT_SECRET_KEY not set! Using insecure default. "
+        "Set JWT_SECRET_KEY environment variable for production.",
+        RuntimeWarning
+    )
+    _jwt_secret = 'INSECURE-DEV-ONLY-' + os.urandom(32).hex()
+SECRET_KEY = _jwt_secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 30
