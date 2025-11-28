@@ -15,6 +15,7 @@ from datetime import datetime
 
 from .base_agent import BaseAgent, AgentResult, FindingSeverity
 from .connection_tester import ConnectionTesterAgent
+from .config_validator import ConfigValidatorAgent
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,9 @@ class ConnectivityHub:
         """Register all available agents"""
         # Connection Tester (critical)
         self.agents['connection_tester'] = ConnectionTesterAgent()
+
+        # Config Validator (non-critical, but important)
+        self.agents['config_validator'] = ConfigValidatorAgent()
 
         logger.info(f"Registered {len(self.agents)} agents")
 
@@ -369,12 +373,34 @@ class ConnectivityHub:
         Returns:
             Dictionary with validation results
         """
-        # Placeholder for config validator agent (Phase 4)
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'status': 'not_implemented',
-            'message': 'Config validation will be implemented in Phase 4'
-        }
+        logger.info("Running configuration validation...")
+
+        try:
+            result = await self.agents['config_validator'].execute(run_type='manual')
+
+            # Categorize findings by severity
+            critical = [f for f in result.findings if f.severity == FindingSeverity.CRITICAL]
+            warnings = [f for f in result.findings if f.severity == FindingSeverity.WARNING]
+            info = [f for f in result.findings if f.severity == FindingSeverity.INFO]
+
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'status': 'critical' if critical else ('warning' if warnings else 'healthy'),
+                'total_findings': len(result.findings),
+                'critical': len(critical),
+                'warnings': len(warnings),
+                'info': len(info),
+                'execution_time_ms': result.execution_time_ms,
+                'findings': [f.to_dict() for f in result.findings]
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to validate configs: {e}", exc_info=True)
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'status': 'error',
+                'error': str(e)
+            }
 
     async def shutdown(self):
         """Cleanup and shutdown monitoring"""
