@@ -231,3 +231,33 @@ async def connectivity_health_check() -> Dict:
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+
+@router.get("/network-info")
+async def get_network_info() -> Dict:
+    """
+    Get network connection information for this API server.
+
+    Returns the local network IP and API URLs that clients should use.
+    Essential for iOS devices to connect to the backend on the local network.
+
+    Public endpoint (no authentication required).
+
+    Returns:
+        Dictionary containing:
+        - local_ip: Network IP address (e.g., '192.168.1.100')
+        - api_base_url: Full API URL with protocol and port
+        - localhost_url: Localhost URL (for browser testing)
+        - port: API port number
+        - environment: Current environment (development/production)
+    """
+    try:
+        from network_utils import get_connection_info
+
+        return get_connection_info()
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get network info: {str(e)}"
+        )
