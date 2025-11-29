@@ -19,10 +19,19 @@ def get_connectivity_hub():
     Get the connectivity hub instance.
 
     Must be called at runtime (not import time) to get the initialized hub.
-    Uses module-level access to get the current value of the global variable.
+    Uses sys.modules to get the actual running __main__ module.
     """
-    import main
-    return main.connectivity_hub
+    import sys
+    # When running as python main.py, the module is __main__ not main
+    main_module = sys.modules.get('__main__')
+    if main_module and hasattr(main_module, 'connectivity_hub'):
+        return main_module.connectivity_hub
+    # Fallback: try importing main module directly
+    try:
+        import main
+        return main.connectivity_hub
+    except ImportError:
+        return None
 
 
 @router.get("/status")
@@ -304,4 +313,128 @@ async def get_network_info() -> Dict:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get network info: {str(e)}"
+        )
+
+
+# ============================================================================
+# Phase 7: Enhanced Diagnostics Dashboard
+# ============================================================================
+
+def get_diagnostic_service():
+    """Get the diagnostic service instance"""
+    from agents.mini_agents.diagnostic_service import diagnostic_service
+    return diagnostic_service
+
+
+@router.get("/dashboard")
+async def get_diagnostic_dashboard(
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
+) -> Dict:
+    """
+    Get comprehensive diagnostic dashboard optimized for iOS display.
+
+    Returns structured data including:
+    - Overall system status with color-coded severity
+    - Connection status with response times
+    - Agent health and scheduling info
+    - Performance metrics (cache hits, adaptive adjustments)
+    - Quick stats summary
+    - Recommended refresh interval
+
+    Public endpoint (authentication optional).
+
+    Perfect for SwiftUI rendering with sections and items.
+    """
+    connectivity_hub = get_connectivity_hub()
+
+    if not connectivity_hub:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "overall_status": "warning",
+            "overall_message": "System initializing...",
+            "quick_stats": {"healthy_count": 0, "total_count": 0, "health_percentage": 0},
+            "sections": [],
+            "refresh_interval_seconds": 5
+        }
+
+    try:
+        diagnostic_service = get_diagnostic_service()
+        dashboard = await diagnostic_service.get_dashboard(connectivity_hub)
+        return dashboard
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dashboard: {str(e)}"
+        )
+
+
+@router.get("/quick-status")
+async def get_quick_status() -> Dict:
+    """
+    Get minimal status for quick polling.
+
+    Optimized for low bandwidth - returns just essentials:
+    - status: overall status string
+    - healthy: count of healthy connections
+    - total: total connection count
+    - ok: boolean for quick checks
+
+    Public endpoint (no authentication required).
+
+    Use this for frequent polling to minimize bandwidth.
+    """
+    connectivity_hub = get_connectivity_hub()
+
+    if not connectivity_hub:
+        return {
+            "status": "initializing",
+            "healthy": 0,
+            "total": 0,
+            "ok": True,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    try:
+        diagnostic_service = get_diagnostic_service()
+        return await diagnostic_service.get_quick_status(connectivity_hub)
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "ok": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@router.get("/history")
+async def get_diagnostic_history(
+    minutes: int = 60,
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
+) -> Dict:
+    """
+    Get diagnostic history for trend analysis.
+
+    Returns historical snapshots of system health for the specified time period.
+
+    Args:
+        minutes: Number of minutes of history to return (default: 60)
+
+    Public endpoint (authentication optional).
+    """
+    try:
+        diagnostic_service = get_diagnostic_service()
+        history = diagnostic_service.get_history(minutes=minutes)
+
+        return {
+            "period_minutes": minutes,
+            "snapshots": history,
+            "count": len(history)
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get history: {str(e)}"
         )
