@@ -14,6 +14,17 @@ from auth import get_current_admin_user, get_current_user_optional, TokenData
 router = APIRouter(prefix="/api/connectivity", tags=["connectivity"])
 
 
+def get_connectivity_hub():
+    """
+    Get the connectivity hub instance.
+
+    Must be called at runtime (not import time) to get the initialized hub.
+    Uses module-level access to get the current value of the global variable.
+    """
+    import main
+    return main.connectivity_hub
+
+
 @router.get("/status")
 async def get_connectivity_status(
     current_user: Optional[TokenData] = Depends(get_current_user_optional)
@@ -26,7 +37,7 @@ async def get_connectivity_status(
 
     Public endpoint (authentication optional) - useful for health monitoring.
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         raise HTTPException(
@@ -57,7 +68,7 @@ async def test_specific_connection(
     Args:
         connection_name: Name of connection to test (e.g., 'backend-database')
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         raise HTTPException(
@@ -93,7 +104,7 @@ async def attempt_auto_fix(
     Args:
         connection_name: Name of connection to fix
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         raise HTTPException(
@@ -129,7 +140,7 @@ async def get_detailed_report(
     Args:
         format: Report format ('json', 'markdown', 'text')
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         raise HTTPException(
@@ -178,7 +189,7 @@ async def validate_all_configs(
 
     Returns validation results with actionable fixes for any issues found.
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         raise HTTPException(
@@ -196,6 +207,39 @@ async def validate_all_configs(
         )
 
 
+@router.get("/scheduler/status")
+async def get_scheduler_status(
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
+) -> Dict:
+    """
+    Get smart scheduler status and optimization metrics.
+
+    Shows:
+    - Current scheduling intervals for each agent
+    - Adaptive adjustments made
+    - Cache hit statistics
+    - File change triggers
+    - Compute savings metrics
+
+    Returns scheduler optimization status.
+    """
+    connectivity_hub = get_connectivity_hub()
+
+    if not connectivity_hub:
+        raise HTTPException(
+            status_code=503,
+            detail="Connectivity monitoring not initialized"
+        )
+
+    try:
+        return connectivity_hub.get_scheduler_status()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get scheduler status: {str(e)}"
+        )
+
+
 @router.get("/health")
 async def connectivity_health_check() -> Dict:
     """
@@ -206,7 +250,7 @@ async def connectivity_health_check() -> Dict:
 
     Public endpoint (no authentication required).
     """
-    from main import connectivity_hub
+    connectivity_hub = get_connectivity_hub()
 
     if not connectivity_hub:
         return {

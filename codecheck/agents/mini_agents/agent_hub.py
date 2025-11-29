@@ -17,6 +17,7 @@ from .base_agent import BaseAgent, AgentResult, FindingSeverity
 from .connection_tester import ConnectionTesterAgent
 from .config_validator import ConfigValidatorAgent
 from .auth_flow_tester import AuthFlowTesterAgent
+from .smart_scheduler import SmartScheduler, OptimizedAgentRunner, HealthStatus
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,10 @@ class ConnectivityHub:
 
         # Register agents
         self._register_agents()
+
+        # Initialize smart scheduler for low-compute optimization
+        self.scheduler = SmartScheduler()
+        self.optimized_runner = OptimizedAgentRunner(self, self.scheduler)
 
     def _register_agents(self):
         """Register all available agents"""
@@ -104,36 +109,53 @@ class ConnectivityHub:
 
     async def start_monitoring(self):
         """
-        Start background monitoring of connections and configuration.
+        Start OPTIMIZED background monitoring of connections and configuration.
 
-        This is non-blocking and runs periodically to monitor system health.
+        Uses smart scheduling to minimize compute:
+        - Adaptive intervals based on health status
+        - File change detection for config checks
+        - Result caching to avoid redundant work
+        - Load-aware execution
         """
-        logger.info("🔄 Starting background connectivity monitoring...")
+        logger.info("🔄 Starting OPTIMIZED background monitoring...")
+        logger.info(f"📊 Scheduler intervals: connection={self.scheduler.schedules['connection_tester'].base_interval}s, "
+                    f"config={self.scheduler.schedules['config_validator'].base_interval}s, "
+                    f"auth={self.scheduler.schedules['auth_flow_tester'].base_interval}s")
 
         while True:
             try:
-                # Wait for configured interval (default: 1 minute for connection tests)
-                await asyncio.sleep(60)
+                # Get next scheduled agents
+                next_runs = self.scheduler.get_next_scheduled()
 
-                # Run connection tester
-                result = await self.agents['connection_tester'].execute(run_type='scheduled')
+                # Run any agents that are due
+                for agent_name, seconds_remaining in next_runs:
+                    if seconds_remaining <= 0:
+                        should_run, reason = self.scheduler.should_run(agent_name)
 
-                # Log any new issues
-                if result.findings:
-                    critical = [f for f in result.findings if f.severity == FindingSeverity.CRITICAL]
-                    warnings = [f for f in result.findings if f.severity == FindingSeverity.WARNING]
+                        if should_run:
+                            logger.debug(f"Running {agent_name} (reason: {reason})")
+                            result = await self.optimized_runner.run_agent_if_needed(agent_name, force=True)
 
-                    if critical:
-                        logger.error(f"❌ Found {len(critical)} critical connectivity issues")
-                    if warnings:
-                        logger.warning(f"⚠️  Found {len(warnings)} connectivity warnings")
+                            if result and result.findings:
+                                critical = [f for f in result.findings if f.severity == FindingSeverity.CRITICAL]
+                                warnings = [f for f in result.findings if f.severity == FindingSeverity.WARNING]
+
+                                if critical:
+                                    logger.error(f"❌ {agent_name}: {len(critical)} critical issues")
+                                if warnings:
+                                    logger.warning(f"⚠️  {agent_name}: {len(warnings)} warnings")
+                        else:
+                            logger.debug(f"Skipping {agent_name}: {reason}")
+
+                # Sleep for a short interval before checking again
+                await asyncio.sleep(5)
 
             except asyncio.CancelledError:
-                logger.info("Background monitoring cancelled")
+                logger.info("Optimized monitoring cancelled")
                 break
             except Exception as e:
-                logger.error(f"Error in background monitoring: {e}", exc_info=True)
-                await asyncio.sleep(60)  # Wait before retrying
+                logger.error(f"Error in optimized monitoring: {e}", exc_info=True)
+                await asyncio.sleep(10)
 
     async def get_current_status(self) -> Dict:
         """
@@ -406,9 +428,21 @@ class ConnectivityHub:
                 'error': str(e)
             }
 
+    def get_scheduler_status(self) -> Dict:
+        """
+        Get smart scheduler status and metrics.
+
+        Returns:
+            Dictionary with scheduler status, metrics, and next scheduled runs
+        """
+        return self.scheduler.get_status()
+
     async def shutdown(self):
         """Cleanup and shutdown monitoring"""
         logger.info("Shutting down connectivity hub...")
+
+        # Stop the optimized runner
+        self.optimized_runner.stop()
 
         if self.monitoring_task and not self.monitoring_task.done():
             self.monitoring_task.cancel()
@@ -416,5 +450,10 @@ class ConnectivityHub:
                 await self.monitoring_task
             except asyncio.CancelledError:
                 pass
+
+        # Log final metrics
+        metrics = self.scheduler.metrics.to_dict()
+        logger.info(f"📊 Final scheduler metrics: {metrics['total_runs']} runs, "
+                    f"{metrics['skipped_runs']} skipped, {metrics['cached_hits']} cache hits")
 
         logger.info("Connectivity hub shut down")
