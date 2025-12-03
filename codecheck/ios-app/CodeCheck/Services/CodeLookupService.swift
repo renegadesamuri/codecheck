@@ -2,19 +2,31 @@ import Foundation
 import CoreLocation
 
 class CodeLookupService {
-    // Configure this to match your API server
-    // For local development: use your Mac's IP address (e.g., "http://192.168.1.100:8000")
-    // For production: use your server's URL
-    // Current Mac IP: 10.0.0.214 - Updated for iPhone testing
-    private let baseURL = "http://10.0.0.214:8001"
-
+    private let baseURL: String
     private let session: URLSession
     private let authService: AuthService?
 
     init(authService: AuthService? = nil) {
+        // Use the same base URL configuration as AuthService
+        let useCustomServer = UserDefaults.standard.bool(forKey: "useCustomServer")
+        let customServerURL = UserDefaults.standard.string(forKey: "customServerURL")
+        
+        if useCustomServer, let customURL = customServerURL, !customURL.isEmpty {
+            self.baseURL = customURL
+        } else {
+            // Match the AuthService environment settings
+            #if targetEnvironment(simulator)
+            self.baseURL = "http://localhost:8000"
+            #else
+            // For physical device - IMPORTANT: Update this with your Mac's IP address
+            self.baseURL = "http://10.0.0.214:8000"  // Changed from port 8001 to 8000
+            #endif
+        }
+        
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 60
+        configuration.timeoutIntervalForRequest = 60  // Increased to allow slower backend responses
+        configuration.timeoutIntervalForResource = 120 // Increased for large resource operations
+        configuration.waitsForConnectivity = true
         self.session = URLSession(configuration: configuration)
         self.authService = authService
     }
@@ -188,7 +200,7 @@ class CodeLookupService {
         let endpoint = "\(baseURL)/"
 
         let request = URLRequest(url: URL(string: endpoint)!)
-        let (data, response) = try await session.data(for: request)
+        let (_, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {

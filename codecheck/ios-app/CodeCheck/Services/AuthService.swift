@@ -35,8 +35,8 @@ class AuthService: ObservableObject {
         }
 
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 60
+        configuration.timeoutIntervalForRequest = 60  // Increased to allow slower backend responses
+        configuration.timeoutIntervalForResource = 120  // Increased for large resource operations
         configuration.waitsForConnectivity = true
         self.session = URLSession(configuration: configuration)
 
@@ -287,8 +287,7 @@ class AuthService: ObservableObject {
         switch httpResponse.statusCode {
         case 200...299:
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            decoder.dateDecodingStrategy = .iso8601
+            // Note: Don't use .convertFromSnakeCase - User's CodingKeys already handle snake_case mapping
             let user = try decoder.decode(User.self, from: data)
             self.currentUser = user
 
@@ -550,9 +549,8 @@ class AuthService: ObservableObject {
         switch httpResponse.statusCode {
         case 200...299:
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            // Note: Don't use .convertFromSnakeCase - our CodingKeys already handle snake_case mapping
 
-            // Dates are now handled in the User model's custom init
             let authResponse = try decoder.decode(AuthResponse.self, from: data)
 
             // Store tokens securely
@@ -614,14 +612,14 @@ extension AuthService {
             switch self {
             case .development:
                 // Try these in order if connection fails:
-                // 1. For iOS Simulator: "http://localhost:8001"
-                // 2. For physical device, use your Mac's IP address: "http://192.168.1.XXX:8001"
-                // 3. Or use your Mac's hostname: "http://MacBook-Pro.local:8001"
+                // 1. For iOS Simulator: "http://localhost:8000"
+                // 2. For physical device, use your Mac's IP address: "http://192.168.1.XXX:8000"
+                // 3. Or use your Mac's hostname: "http://MacBook-Pro.local:8000"
                 #if targetEnvironment(simulator)
-                return "http://localhost:8001"
+                return "http://localhost:8000"
                 #else
                 // For physical device, you may need to change this to your Mac's IP address
-                return "http://10.0.0.214"  // UPDATE THIS WITH YOUR MAC'S IP
+                return "http://10.0.0.214:8000"  // UPDATE THIS WITH YOUR MAC'S IP
                 #endif
             case .production:
                 // TODO: Replace with your actual Render Web Service URL (starts with https://)
