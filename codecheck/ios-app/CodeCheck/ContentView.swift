@@ -1,5 +1,7 @@
 import SwiftUI
 
+import SwiftUI
+
 struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @State private var selectedTab = 0
@@ -55,16 +57,16 @@ struct ProfileView: View {
                             )
                             .frame(width: 60, height: 60)
                             .overlay(
-                                Text(authService.currentUser?.name?.prefix(1).uppercased() ?? "U")
+                                Text((authService.currentUser?.name?.prefix(1) ?? authService.currentUser?.email.prefix(1) ?? "U").uppercased())
                                     .font(.title)
                                     .foregroundColor(.white)
                             )
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(authService.currentUser?.name ?? "User")
+                            Text(authService.currentUser?.name ?? authService.currentUser?.email.components(separatedBy: "@").first?.capitalized ?? "User")
                                 .font(.headline)
 
-                            Text(authService.currentUser?.email ?? "")
+                            Text(authService.currentUser?.email ?? "No email")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -96,19 +98,19 @@ struct ProfileView: View {
                 // App Section
                 Section("App") {
                     NavigationLink {
-                        Text("Settings")
+                        SettingsView()
                     } label: {
                         Label("Settings", systemImage: "gear")
                     }
 
                     NavigationLink {
-                        Text("Help & Support")
+                        HelpSupportView()
                     } label: {
                         Label("Help & Support", systemImage: "questionmark.circle")
                     }
 
                     NavigationLink {
-                        Text("About")
+                        AboutView()
                     } label: {
                         Label("About", systemImage: "info.circle")
                     }

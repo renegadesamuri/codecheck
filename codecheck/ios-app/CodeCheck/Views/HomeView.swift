@@ -1,5 +1,7 @@
 import SwiftUI
 
+import SwiftUI
+
 struct HomeView: View {
     @EnvironmentObject var projectManager: ProjectManager
     @State private var showingMeasurement = false
@@ -103,6 +105,13 @@ struct HomeView: View {
             .sheet(isPresented: $showingConversation) {
                 NavigationStack {
                     ConversationView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") {
+                                    showingConversation = false
+                                }
+                            }
+                        }
                 }
             }
         }
