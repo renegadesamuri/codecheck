@@ -77,19 +77,19 @@ struct ProfileView: View {
                 // Account Section
                 Section("Account") {
                     NavigationLink {
-                        Text("Edit Profile")
+                        EditProfileView()
                     } label: {
                         Label("Edit Profile", systemImage: "person.circle")
                     }
 
                     NavigationLink {
-                        Text("Change Password")
+                        ChangePasswordView()
                     } label: {
                         Label("Change Password", systemImage: "lock")
                     }
 
                     NavigationLink {
-                        Text("Notifications")
+                        NotificationsView()
                     } label: {
                         Label("Notifications", systemImage: "bell")
                     }
