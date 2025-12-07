@@ -228,10 +228,13 @@ struct PhotoCaptureView: View {
                 }
             }
             .onChange(of: selectedPhoto) { _, newValue in
-                Task {
+                // Move image loading to background thread to avoid UI blocking
+                Task.detached(priority: .userInitiated) {
                     if let data = try? await newValue?.loadTransferable(type: Data.self),
                        let image = UIImage(data: data) {
-                        capturedImage = image
+                        await MainActor.run {
+                            capturedImage = image
+                        }
                     }
                 }
             }
@@ -332,19 +335,24 @@ struct PhotoDocumentation: Identifiable, Codable {
             return UIImage(data: data)
         }
         set {
+            // Compression happens synchronously in setter (used rarely)
+            // For init, use async compression via compressImageAsync()
             imageData = newValue?.jpegData(compressionQuality: 0.8)
         }
     }
 
     init(id: UUID, image: UIImage, location: String, notes: String, tags: [String], projectId: UUID?, measurementId: UUID?, timestamp: Date) {
         self.id = id
-        self.imageData = image.jpegData(compressionQuality: 0.8)
         self.location = location
         self.notes = notes
         self.tags = tags
         self.projectId = projectId
         self.measurementId = measurementId
         self.timestamp = timestamp
+
+        // TODO: Future optimization - make this async with factory method
+        // For now, keep synchronous for compatibility (called infrequently)
+        self.imageData = image.jpegData(compressionQuality: 0.8)
     }
 }
 

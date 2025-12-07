@@ -8,6 +8,7 @@ struct MeasurementView: View {
     @State private var selectedType: MeasurementType = .stairTread
     @State private var showingResults = false
     @State private var measurement: Measurement?
+    @State private var showingSettings = false
 
     let project: Project?
 
@@ -20,102 +21,37 @@ struct MeasurementView: View {
                         ARViewContainer(measurementEngine: measurementEngine)
                             .edgesIgnoringSafeArea(.all)
 
-                        VStack {
-                            // Top Controls
-                            VStack(spacing: 16) {
-                                // Measurement Type Picker
-                                Picker("Type", selection: $selectedType) {
-                                    ForEach(MeasurementType.allCases, id: \.self) { type in
-                                        Text(type.rawValue).tag(type)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .padding()
-                                .background(.ultraThinMaterial)
-                                .cornerRadius(12)
+                        // Crosshair overlay when measuring
+                        if measurementEngine.measurementState.isPlacingPoints && measurementEngine.measurementState.currentDistance == nil {
+                            CrosshairOverlay()
+                        }
 
-                                // Instructions
-                                if !measurementEngine.isPlacingPoints {
-                                    InstructionCard(
-                                        icon: "hand.tap.fill",
-                                        text: "Tap 'Start Measuring' to begin"
-                                    )
-                                } else {
-                                    InstructionCard(
-                                        icon: "hand.point.up.left.fill",
-                                        text: "Tap to place measurement points"
-                                    )
-                                }
+                        VStack(spacing: 0) {
+                            // Top Controls
+                            TopControlsView(
+                                selectedType: $selectedType,
+                                measurementEngine: measurementEngine,
+                                showingSettings: $showingSettings
+                            )
+
+                            Spacer()
+
+                            // Live Preview Distance (shows while aiming)
+                            if let previewDistance = measurementEngine.measurementState.livePreviewDistance,
+                               measurementEngine.measurementState.currentDistance == nil {
+                                LivePreviewCard(distance: previewDistance)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                                    .animation(.easeOut(duration: 0.15), value: previewDistance)
                             }
-                            .padding()
 
                             Spacer()
 
                             // Bottom Controls
-                            VStack(spacing: 16) {
-                                // Current Distance Display
-                                if let distance = measurementEngine.currentDistance {
-                                    Text(String(format: "%.2f inches", distance))
-                                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [.blue, .purple],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .padding()
-                                        .background(.ultraThinMaterial)
-                                        .cornerRadius(20)
-                                }
-
-                                // Action Buttons
-                                HStack(spacing: 16) {
-                                    if measurementEngine.isPlacingPoints {
-                                        Button {
-                                            measurementEngine.clear()
-                                        } label: {
-                                            Label("Clear", systemImage: "arrow.counterclockwise")
-                                                .frame(maxWidth: .infinity)
-                                                .padding()
-                                                .background(Color.red.opacity(0.8))
-                                                .foregroundColor(.white)
-                                                .cornerRadius(12)
-                                        }
-
-                                        Button {
-                                            saveMeasurement()
-                                        } label: {
-                                            Label("Done", systemImage: "checkmark")
-                                                .frame(maxWidth: .infinity)
-                                                .padding()
-                                                .background(Color.green.opacity(0.8))
-                                                .foregroundColor(.white)
-                                                .cornerRadius(12)
-                                        }
-                                        .disabled(measurementEngine.currentDistance == nil)
-                                    } else {
-                                        Button {
-                                            measurementEngine.startMeasuring()
-                                            measurementEngine.measurementType = selectedType
-                                        } label: {
-                                            Label("Start Measuring", systemImage: "ruler")
-                                                .frame(maxWidth: .infinity)
-                                                .padding()
-                                                .background(
-                                                    LinearGradient(
-                                                        colors: [.blue, .purple],
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .foregroundColor(.white)
-                                                .cornerRadius(12)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding()
+                            BottomControlsView(
+                                measurementEngine: measurementEngine,
+                                selectedType: $selectedType,
+                                onDone: saveMeasurement
+                            )
                         }
                     }
                 } else {
@@ -133,7 +69,7 @@ struct MeasurementView: View {
                     }
                 }
             }
-            .alert("ARKit Not Available", isPresented: $measurementEngine.showingError) {
+            .alert("ARKit Not Available", isPresented: $measurementEngine.measurementState.showingError) {
                 Button("OK") { dismiss() }
             } message: {
                 Text("This device does not support ARKit or LiDAR functionality required for measurements.")
@@ -143,11 +79,14 @@ struct MeasurementView: View {
                     MeasurementResultView(measurement: measurement, project: project)
                 }
             }
+            .sheet(isPresented: $showingSettings) {
+                MeasurementSettingsSheet(measurementEngine: measurementEngine)
+            }
         }
     }
 
     private func saveMeasurement() {
-        guard let distance = measurementEngine.currentDistance else { return }
+        guard let distance = measurementEngine.measurementState.currentDistance else { return }
 
         measurement = Measurement(
             type: selectedType,
@@ -160,6 +99,466 @@ struct MeasurementView: View {
     }
 }
 
+// MARK: - Crosshair Overlay
+
+struct CrosshairOverlay: View {
+    @State private var scale: CGFloat = 1.0
+
+    var body: some View {
+        ZStack {
+            // Outer ring
+            Circle()
+                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                .frame(width: 60, height: 60)
+                .scaleEffect(scale)
+
+            // Inner crosshair
+            Group {
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 20, height: 1.5)
+
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 1.5, height: 20)
+            }
+
+            // Center dot
+            Circle()
+                .fill(Color.white)
+                .frame(width: 6, height: 6)
+        }
+        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                scale = 1.1
+            }
+        }
+    }
+}
+
+// MARK: - Top Controls
+
+struct TopControlsView: View {
+    @Binding var selectedType: MeasurementType
+    @ObservedObject var measurementEngine: MeasurementEngine
+    @Binding var showingSettings: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Tracking Quality Indicator
+            TrackingQualityBadge(quality: measurementEngine.trackingState.quality)
+
+            HStack(spacing: 12) {
+                // Measurement Type Picker
+                Menu {
+                    ForEach(MeasurementType.allCases, id: \.self) { type in
+                        Button {
+                            selectedType = type
+                            measurementEngine.measurementType = type
+                        } label: {
+                            HStack {
+                                Text(type.rawValue)
+                                if selectedType == type {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: iconForType(selectedType))
+                            .font(.body)
+                        Text(selectedType.rawValue)
+                            .font(.subheadline.weight(.medium))
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(20)
+                }
+
+                Spacer()
+
+                // Settings button
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.body)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+            }
+
+            // Instruction Card
+            InstructionCard(
+                icon: instructionIcon,
+                text: measurementEngine.trackingState.instructionMessage,
+                isAutoDetecting: measurementEngine.detectionState.isAutoDetecting
+            )
+        }
+        .padding()
+    }
+
+    private var instructionIcon: String {
+        if measurementEngine.detectionState.isAutoDetecting {
+            return "sparkles"
+        } else if !measurementEngine.measurementState.isPlacingPoints {
+            return "hand.tap.fill"
+        } else if measurementEngine.measurementState.currentDistance != nil {
+            return "checkmark.circle.fill"
+        } else {
+            return "hand.point.up.left.fill"
+        }
+    }
+
+    private func iconForType(_ type: MeasurementType) -> String {
+        switch type {
+        case .stairTread: return "stairs"
+        case .stairRiser: return "arrow.up.square"
+        case .doorWidth: return "door.left.hand.open"
+        case .railingHeight: return "rectangle.portrait.arrowtriangle.2.inward"
+        case .ceilingHeight: return "arrow.up.to.line"
+        case .custom: return "ruler"
+        }
+    }
+}
+
+// MARK: - Tracking Quality Badge
+
+struct TrackingQualityBadge: View {
+    let quality: MeasurementEngine.TrackingQuality
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(qualityColor)
+                .frame(width: 8, height: 8)
+
+            Text(quality.description)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .cornerRadius(12)
+    }
+
+    private var qualityColor: Color {
+        switch quality {
+        case .notAvailable: return .red
+        case .limited: return .orange
+        case .normal: return .green
+        }
+    }
+}
+
+// MARK: - Live Preview Card
+
+struct LivePreviewCard: View {
+    let distance: Double
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("Preview")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Text(String(format: "%.1f\"", distance))
+                .font(.system(size: 32, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
+    }
+}
+
+// MARK: - Bottom Controls
+
+struct BottomControlsView: View {
+    @ObservedObject var measurementEngine: MeasurementEngine
+    @Binding var selectedType: MeasurementType
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Final Distance Display with Confidence
+            if let distance = measurementEngine.measurementState.currentDistance {
+                FinalMeasurementCard(
+                    distance: distance,
+                    confidence: measurementEngine.measurementState.measurementConfidence
+                )
+                .transition(.scale.combined(with: .opacity))
+            }
+
+            // Action Buttons
+            HStack(spacing: 12) {
+                if measurementEngine.measurementState.isPlacingPoints {
+                    // Undo Button
+                    Button {
+                        measurementEngine.undoLastPoint()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.title3)
+                            .frame(width: 50, height: 50)
+                            .background(Color.gray.opacity(0.3))
+                            .foregroundColor(.white)
+                            .clipShape(Circle())
+                    }
+
+                    // Clear Button
+                    Button {
+                        measurementEngine.clear()
+                    } label: {
+                        Label("Clear", systemImage: "arrow.counterclockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.red.opacity(0.8))
+                            .foregroundColor(.white)
+                            .cornerRadius(14)
+                    }
+
+                    // Done Button
+                    Button {
+                        onDone()
+                    } label: {
+                        Label("Done", systemImage: "checkmark")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(measurementEngine.measurementState.currentDistance != nil ? Color.green : Color.green.opacity(0.4))
+                            .foregroundColor(.white)
+                            .cornerRadius(14)
+                    }
+                    .disabled(measurementEngine.measurementState.currentDistance == nil)
+                } else {
+                    // Start Measuring Button
+                    Button {
+                        measurementEngine.startMeasuring()
+                        measurementEngine.measurementType = selectedType
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "ruler")
+                                .font(.title2)
+                            Text("Start Measuring")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(
+                            LinearGradient(
+                                colors: [.blue, .purple],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundColor(.white)
+                        .cornerRadius(16)
+                        .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                }
+            }
+
+            // Gesture hints
+            if measurementEngine.measurementState.isPlacingPoints {
+                GestureHintsView()
+            }
+        }
+        .padding()
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: measurementEngine.measurementState.isPlacingPoints)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: measurementEngine.measurementState.currentDistance)
+    }
+}
+
+// MARK: - Final Measurement Card
+
+struct FinalMeasurementCard: View {
+    let distance: Double
+    let confidence: Float
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Main distance
+            Text(String(format: "%.2f", distance))
+                .font(.system(size: 56, weight: .bold, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.blue, .purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+            +
+            Text(" in")
+                .font(.system(size: 24, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+
+            // Confidence indicator
+            ConfidenceIndicator(confidence: confidence)
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 32)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+    }
+}
+
+// MARK: - Confidence Indicator
+
+struct ConfidenceIndicator: View {
+    let confidence: Float
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Confidence bars
+            HStack(spacing: 3) {
+                ForEach(0..<5) { index in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(index < Int(confidence * 5) ? confidenceColor : Color.gray.opacity(0.3))
+                        .frame(width: 8, height: 16 + CGFloat(index * 2))
+                }
+            }
+
+            Text(confidenceText)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var confidenceColor: Color {
+        if confidence >= 0.8 {
+            return .green
+        } else if confidence >= 0.5 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+
+    private var confidenceText: String {
+        if confidence >= 0.8 {
+            return "High accuracy"
+        } else if confidence >= 0.5 {
+            return "Good accuracy"
+        } else {
+            return "Low accuracy"
+        }
+    }
+}
+
+// MARK: - Gesture Hints
+
+struct GestureHintsView: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            HintBadge(icon: "hand.tap", text: "Tap to place")
+            HintBadge(icon: "hand.tap.fill", text: "2x tap to clear")
+            HintBadge(icon: "hand.draw", text: "Hold for edges")
+        }
+        .padding(.top, 8)
+    }
+}
+
+struct HintBadge: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(text)
+                .font(.caption2)
+        }
+        .foregroundColor(.secondary)
+    }
+}
+
+// MARK: - Settings Sheet
+
+struct MeasurementSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var measurementEngine: MeasurementEngine
+    @State private var edgeDetectionEnabled = true
+    @State private var hapticFeedbackEnabled = true
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Auto-Detection") {
+                    Toggle("Edge Detection", isOn: $edgeDetectionEnabled)
+                        .onChange(of: edgeDetectionEnabled) { _, newValue in
+                            measurementEngine.toggleEdgeDetection(newValue)
+                        }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Snap Distance")
+                        Text("Points will snap to detected edges within this range")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section("Feedback") {
+                    Toggle("Haptic Feedback", isOn: $hapticFeedbackEnabled)
+                }
+
+                Section("Tips") {
+                    TipRow(icon: "hand.draw.fill", title: "Long Press", description: "Hold to see detected edges and corners")
+                    TipRow(icon: "hand.tap.fill", title: "Double Tap", description: "Quickly clear all points")
+                    TipRow(icon: "arrow.uturn.backward", title: "Undo", description: "Remove the last placed point")
+                    TipRow(icon: "move.3d", title: "Move Slowly", description: "Slower movement improves accuracy")
+                }
+            }
+            .navigationTitle("Measurement Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+struct TipRow: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(.blue)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - AR View Container
+
 struct ARViewContainer: UIViewRepresentable {
     @ObservedObject var measurementEngine: MeasurementEngine
 
@@ -170,26 +569,62 @@ struct ARViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
 
+// MARK: - Instruction Card
+
 struct InstructionCard: View {
     let icon: String
     let text: String
+    var isAutoDetecting: Bool = false
+
+    @State private var isAnimating = false
 
     var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(.blue)
+        HStack(spacing: 12) {
+            ZStack {
+                if isAutoDetecting {
+                    Circle()
+                        .fill(Color.cyan.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                        .scaleEffect(isAnimating ? 1.3 : 1.0)
+                        .opacity(isAnimating ? 0 : 1)
+                }
+
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundColor(isAutoDetecting ? .cyan : .blue)
+            }
+            .frame(width: 36, height: 36)
 
             Text(text)
                 .font(.subheadline)
+                .foregroundColor(.primary)
 
             Spacer()
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(.ultraThinMaterial)
-        .cornerRadius(12)
+        .cornerRadius(14)
+        .onAppear {
+            if isAutoDetecting {
+                withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                    isAnimating = true
+                }
+            }
+        }
+        .onChange(of: isAutoDetecting) { _, newValue in
+            if newValue {
+                withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                    isAnimating = true
+                }
+            } else {
+                isAnimating = false
+            }
+        }
     }
 }
+
+// MARK: - Measurement Result View
 
 struct MeasurementResultView: View {
     @Environment(\.dismiss) private var dismiss
@@ -504,7 +939,7 @@ struct MeasurementResultView: View {
                     loadingMessage = "Initiating code download for \(jurisdiction.name)..."
                 }
 
-                let response = try await codeLookupService.triggerCodeLoading(
+                _ = try await codeLookupService.triggerCodeLoading(
                     jurisdictionId: jurisdiction.id
                 )
 
@@ -672,6 +1107,8 @@ struct MeasurementResultView: View {
     }
 }
 
+// MARK: - Unsupported AR View
+
 struct UnsupportedARView: View {
     let onDismiss: () -> Void
 
@@ -716,5 +1153,3 @@ struct UnsupportedARView: View {
     MeasurementView(project: nil)
         .environmentObject(ProjectManager())
 }
-
-

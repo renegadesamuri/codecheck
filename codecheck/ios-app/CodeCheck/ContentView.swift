@@ -5,32 +5,59 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var authService: AuthService
     @State private var selectedTab = 0
+    @State private var loadedTabs: Set<Int> = [0]  // Home loaded by default
 
     var body: some View {
         TabView(selection: $selectedTab) {
+            // Home - always loaded
             HomeView()
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
                 .tag(0)
 
-            ProjectsView()
-                .tabItem {
-                    Label("Projects", systemImage: "folder.fill")
+            // Projects - lazy loaded
+            Group {
+                if loadedTabs.contains(1) {
+                    ProjectsView()
+                } else {
+                    ProgressView()
                 }
-                .tag(1)
+            }
+            .tabItem {
+                Label("Projects", systemImage: "folder.fill")
+            }
+            .tag(1)
 
-            ConversationView()
-                .tabItem {
-                    Label("AI Assistant", systemImage: "bubble.left.and.bubble.right.fill")
+            // AI Assistant - lazy loaded
+            Group {
+                if loadedTabs.contains(2) {
+                    ConversationView()
+                } else {
+                    ProgressView()
                 }
-                .tag(2)
+            }
+            .tabItem {
+                Label("AI Assistant", systemImage: "bubble.left.and.bubble.right.fill")
+            }
+            .tag(2)
 
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
+            // Profile - lazy loaded
+            Group {
+                if loadedTabs.contains(3) {
+                    ProfileView()
+                } else {
+                    ProgressView()
                 }
-                .tag(3)
+            }
+            .tabItem {
+                Label("Profile", systemImage: "person.fill")
+            }
+            .tag(3)
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // Load tab on first access
+            loadedTabs.insert(newTab)
         }
     }
 }

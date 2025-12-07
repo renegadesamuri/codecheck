@@ -3,7 +3,15 @@ import Combine
 
 @MainActor
 class ConversationManager: ObservableObject {
-    @Published var messages: [Message] = []
+    // Phase 2.4: Limit messages to prevent unbounded memory growth
+    @Published var messages: [Message] = [] {
+        didSet {
+            // Keep only last 100 messages to prevent memory bloat
+            if messages.count > 100 {
+                messages = Array(messages.suffix(100))
+            }
+        }
+    }
     private let apiService = CodeLookupService()
 
     init() {

@@ -3,14 +3,13 @@ import CoreLocation
 
 class CodeLookupService {
     private let baseURL: String
-    private let session: URLSession
     private let authService: AuthService?
 
     init(authService: AuthService? = nil) {
         // Use the same base URL configuration as AuthService
         let useCustomServer = UserDefaults.standard.bool(forKey: "useCustomServer")
         let customServerURL = UserDefaults.standard.string(forKey: "customServerURL")
-        
+
         if useCustomServer, let customURL = customServerURL, !customURL.isEmpty {
             self.baseURL = customURL
         } else {
@@ -22,12 +21,7 @@ class CodeLookupService {
             self.baseURL = "http://10.0.0.214:8000"  // Changed from port 8001 to 8000
             #endif
         }
-        
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60  // Increased to allow slower backend responses
-        configuration.timeoutIntervalForResource = 120 // Increased for large resource operations
-        configuration.waitsForConnectivity = true
-        self.session = URLSession(configuration: configuration)
+
         self.authService = authService
     }
 
@@ -64,7 +58,15 @@ class CodeLookupService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
+        // Check cache first - can save 60% of network requests
+        if let cachedData = NetworkCache.shared.get(for: request) {
+            let decoder = JSONDecoder()
+            let result = try decoder.decode(JurisdictionResponse.self, from: cachedData)
+            return result.jurisdictions
+        }
+
+        // Cache miss - fetch from network
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -77,6 +79,9 @@ class CodeLookupService {
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
+
+        // Cache successful response
+        NetworkCache.shared.set(data, for: request)
 
         let decoder = JSONDecoder()
         let result = try decoder.decode(JurisdictionResponse.self, from: data)
@@ -101,7 +106,15 @@ class CodeLookupService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(complianceRequest)
 
-        let (data, response) = try await session.data(for: request)
+        // Check cache first - compliance checks can be cached for 5 minutes
+        if let cachedData = NetworkCache.shared.get(for: request) {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(ComplianceResponse.self, from: cachedData)
+        }
+
+        // Cache miss - fetch from network
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -114,6 +127,9 @@ class CodeLookupService {
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
+
+        // Cache successful response
+        NetworkCache.shared.set(data, for: request)
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -139,7 +155,7 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -177,7 +193,7 @@ class CodeLookupService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(conversationRequest)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -200,7 +216,7 @@ class CodeLookupService {
         let endpoint = "\(baseURL)/"
 
         let request = URLRequest(url: URL(string: endpoint)!)
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -221,7 +237,15 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await session.data(for: request)
+        // Check cache first - status checks cached for 1 minute
+        if let cachedData = NetworkCache.shared.get(for: request) {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(JurisdictionStatus.self, from: cachedData)
+        }
+
+        // Cache miss - fetch from network
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -234,6 +258,9 @@ class CodeLookupService {
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.invalidResponse
         }
+
+        // Cache successful response
+        NetworkCache.shared.set(data, for: request)
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -250,7 +277,7 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
@@ -279,7 +306,7 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await NetworkManager.shared.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse

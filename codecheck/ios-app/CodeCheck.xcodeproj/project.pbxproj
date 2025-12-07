@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		563E58202EE3D9BA003B127C /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 563E581F2EE3D9BA003B127C /* ChangePasswordView.swift */; };
+		563E58222EE3D9BA003B127C /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 563E58212EE3D9BA003B127C /* EditProfileView.swift */; };
+		563E58242EE3D9BA003B127C /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 563E58232EE3D9BA003B127C /* NotificationsView.swift */; };
+		56CCB9FC2EE2108000D30AEB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56CCB9FB2EE2108000D30AEB /* SettingsView.swift */; };
+		56CCB9FE2EE2108000D30AEB /* HelpSupportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56CCB9FD2EE2108000D30AEB /* HelpSupportView.swift */; };
+		56CCBA002EE2108000D30AEB /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56CCB9FF2EE2108000D30AEB /* AboutView.swift */; };
 		AA0000010000000000000001 /* CodeCheckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* CodeCheckApp.swift */; };
 		AA0000030000000000000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000040000000000000001 /* ContentView.swift */; };
 		AA0000050000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000060000000000000001 /* Assets.xcassets */; };
@@ -21,6 +27,10 @@
 		AA0000230000000000000001 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000240000000000000001 /* ConversationView.swift */; };
 		AA0000250000000000000001 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000260000000000000001 /* ProjectsView.swift */; };
 		AA0000510000000000000001 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000500000000000000001 /* AuthService.swift */; };
+		BFNM64386b7aba224c0688c9 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = NMfef18ae964a6451d8b1f6e /* NetworkManager.swift */; };
+		BFNC5de61adb519d43979113 /* NetworkCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = NCf3a0bd3f76614160a78cf7 /* NetworkCache.swift */; };
+		BFGC1a8cba4b190e496fa91b /* GradientCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = GC0fccdd88656a42898e37c0 /* GradientCache.swift */; };
+		GCae86b0f98f374d86a49c72e /* GradientCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CodeCheck/Utils/GradientCache.swift; sourceTree = SOURCE_ROOT; };
 		AA0000530000000000000001 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000520000000000000001 /* LocationService.swift */; };
 		AA0000550000000000000001 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000540000000000000001 /* AuthView.swift */; };
 		AA0000570000000000000001 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000560000000000000001 /* LoginView.swift */; };
@@ -28,6 +38,20 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		563E581F2EE3D9BA003B127C /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
+		563E58212EE3D9BA003B127C /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		563E58232EE3D9BA003B127C /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		567E3E5D2EDE544C005D2F2A /* ConnectionTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTestView.swift; sourceTree = "<group>"; };
+		567E3E5E2EDE5464005D2F2A /* DeveloperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperSettingsView.swift; sourceTree = "<group>"; };
+		567E3E5F2EDE549D005D2F2A /* CONNECTION_TROUBLESHOOTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONNECTION_TROUBLESHOOTING.md; sourceTree = "<group>"; };
+		567E3E602EDE54BC005D2F2A /* NetworkDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkDiagnosticsView.swift; sourceTree = "<group>"; };
+		567E3E612EDE54EC005D2F2A /* FIXES_SUMMARY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FIXES_SUMMARY.md; sourceTree = "<group>"; };
+		567E3E622EDE550B005D2F2A /* QUICKSTART.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = QUICKSTART.md; sourceTree = "<group>"; };
+		567E3E632EDE552F005D2F2A /* CHECKLIST.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CHECKLIST.md; sourceTree = "<group>"; };
+		567E3E642EDF53EE005D2F2A /* FILES_FIXED.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FILES_FIXED.md; sourceTree = "<group>"; };
+		56CCB9FB2EE2108000D30AEB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		56CCB9FD2EE2108000D30AEB /* HelpSupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSupportView.swift; sourceTree = "<group>"; };
+		56CCB9FF2EE2108000D30AEB /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		AA0000020000000000000001 /* CodeCheckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCheckApp.swift; sourceTree = "<group>"; };
 		AA0000040000000000000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0000060000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -44,6 +68,8 @@
 		AA0000270000000000000001 /* CodeCheck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeCheck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000280000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA0000500000000000000001 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		NMfef18ae964a6451d8b1f6e /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
+		NCf3a0bd3f76614160a78cf7 /* NetworkCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkCache.swift; sourceTree = "<group>"; };
 		AA0000520000000000000001 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		AA0000540000000000000001 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		AA0000560000000000000001 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
@@ -66,6 +92,14 @@
 			children = (
 				AA0000310000000000000001 /* CodeCheck */,
 				AA0000320000000000000001 /* Products */,
+				567E3E5D2EDE544C005D2F2A /* ConnectionTestView.swift */,
+				567E3E5E2EDE5464005D2F2A /* DeveloperSettingsView.swift */,
+				567E3E5F2EDE549D005D2F2A /* CONNECTION_TROUBLESHOOTING.md */,
+				567E3E602EDE54BC005D2F2A /* NetworkDiagnosticsView.swift */,
+				567E3E612EDE54EC005D2F2A /* FIXES_SUMMARY.md */,
+				567E3E622EDE550B005D2F2A /* QUICKSTART.md */,
+				567E3E632EDE552F005D2F2A /* CHECKLIST.md */,
+				567E3E642EDF53EE005D2F2A /* FILES_FIXED.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -80,6 +114,12 @@
 				AA0000350000000000000001 /* Models */,
 				AA0000060000000000000001 /* Assets.xcassets */,
 				AA0000360000000000000001 /* Preview Content */,
+				56CCB9FB2EE2108000D30AEB /* SettingsView.swift */,
+				56CCB9FD2EE2108000D30AEB /* HelpSupportView.swift */,
+				56CCB9FF2EE2108000D30AEB /* AboutView.swift */,
+				563E581F2EE3D9BA003B127C /* ChangePasswordView.swift */,
+				563E58212EE3D9BA003B127C /* EditProfileView.swift */,
+				563E58232EE3D9BA003B127C /* NotificationsView.swift */,
 			);
 			path = CodeCheck;
 			sourceTree = "<group>";
@@ -114,6 +154,8 @@
 				AA0000140000000000000001 /* CodeLookupService.swift */,
 				AA0000160000000000000001 /* ProjectManager.swift */,
 				AA0000500000000000000001 /* AuthService.swift */,
+				NMfef18ae964a6451d8b1f6e /* NetworkManager.swift */,
+				NCf3a0bd3f76614160a78cf7 /* NetworkCache.swift */,
 				AA0000520000000000000001 /* LocationService.swift */,
 			);
 			path = Services;
@@ -163,7 +205,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					AA0000370000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -205,11 +247,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				563E58222EE3D9BA003B127C /* EditProfileView.swift in Sources */,
 				AA0000010000000000000001 /* CodeCheckApp.swift in Sources */,
+				56CCB9FE2EE2108000D30AEB /* HelpSupportView.swift in Sources */,
+				563E58242EE3D9BA003B127C /* NotificationsView.swift in Sources */,
 				AA0000030000000000000001 /* ContentView.swift in Sources */,
 				AA0000090000000000000001 /* MeasurementEngine.swift in Sources */,
 				AA0000110000000000000001 /* ConversationManager.swift in Sources */,
 				AA0000130000000000000001 /* CodeLookupService.swift in Sources */,
+				56CCB9FC2EE2108000D30AEB /* SettingsView.swift in Sources */,
+				563E58202EE3D9BA003B127C /* ChangePasswordView.swift in Sources */,
 				AA0000150000000000000001 /* ProjectManager.swift in Sources */,
 				AA0000170000000000000001 /* Models.swift in Sources */,
 				AA0000190000000000000001 /* HomeView.swift in Sources */,
@@ -217,8 +264,12 @@
 				AA0000230000000000000001 /* ConversationView.swift in Sources */,
 				AA0000250000000000000001 /* ProjectsView.swift in Sources */,
 				AA0000510000000000000001 /* AuthService.swift in Sources */,
+				BFNM64386b7aba224c0688c9 /* NetworkManager.swift in Sources */,
+				BFNC5de61adb519d43979113 /* NetworkCache.swift in Sources */,
+				BFGC1a8cba4b190e496fa91b /* GradientCache.swift in Sources */,
 				AA0000530000000000000001 /* LocationService.swift in Sources */,
 				AA0000550000000000000001 /* AuthView.swift in Sources */,
+				56CCBA002EE2108000D30AEB /* AboutView.swift in Sources */,
 				AA0000570000000000000001 /* LoginView.swift in Sources */,
 				AA0000590000000000000001 /* RegisterView.swift in Sources */,
 			);
@@ -262,6 +313,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -285,6 +337,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -325,6 +378,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -341,6 +395,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -354,7 +409,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"CodeCheck/Preview Content\"";
-				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CodeCheck/Info.plist;
@@ -386,7 +440,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"CodeCheck/Preview Content\"";
-				DEVELOPMENT_TEAM = ZW5J85U8JT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CodeCheck/Info.plist;

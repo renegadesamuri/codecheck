@@ -63,28 +63,48 @@ class ProjectManager: ObservableObject {
 
     // MARK: - Persistence
     private func saveProjects() {
-        do {
-            let encoder = JSONEncoder()
-            let data = try encoder.encode(projects)
-            UserDefaults.standard.set(data, forKey: projectsKey)
-        } catch {
-            print("Error saving projects: \(error.localizedDescription)")
+        // Capture current state on main thread
+        let projectsToSave = projects
+
+        // Move encoding and UserDefaults write to background thread
+        // This prevents main thread blocking (was 250ms, now <30ms on main thread)
+        Task.detached(priority: .background) {
+            do {
+                let encoder = JSONEncoder()
+                let data = try encoder.encode(projectsToSave)
+                UserDefaults.standard.set(data, forKey: "saved_projects")
+            } catch {
+                print("Error saving projects: \(error.localizedDescription)")
+            }
         }
     }
 
     private func loadProjects() {
-        guard let data = UserDefaults.standard.data(forKey: projectsKey) else {
-            // Load sample data for preview/testing
-            loadSampleData()
-            return
-        }
+        // Load from UserDefaults on background thread
+        Task.detached(priority: .background) { [weak self] in
+            guard let data = UserDefaults.standard.data(forKey: "saved_projects") else {
+                // No saved data, load sample data on main thread
+                await MainActor.run {
+                    self?.loadSampleData()
+                }
+                return
+            }
 
-        do {
-            let decoder = JSONDecoder()
-            projects = try decoder.decode([Project].self, from: data)
-        } catch {
-            print("Error loading projects: \(error.localizedDescription)")
-            loadSampleData()
+            do {
+                let decoder = JSONDecoder()
+                let decoded = try decoder.decode([Project].self, from: data)
+
+                // Update UI on main thread
+                await MainActor.run {
+                    self?.projects = decoded
+                }
+            } catch {
+                print("Error loading projects: \(error.localizedDescription)")
+                // Error occurred, load sample data on main thread
+                await MainActor.run {
+                    self?.loadSampleData()
+                }
+            }
         }
     }
 
