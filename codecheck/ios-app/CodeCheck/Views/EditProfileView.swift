@@ -32,13 +32,7 @@ struct EditProfileView: View {
                                     .overlay(Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1))
                             } else {
                                 Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [.blue, .purple],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(GradientCache.bluePurple)
                                     .frame(width: 100, height: 100)
                                     .overlay(
                                         Text((fullName.prefix(1).uppercased().isEmpty ? email.prefix(1) : fullName.prefix(1)).uppercased())
@@ -51,13 +45,7 @@ struct EditProfileView: View {
                             PhotosPicker(selection: $selectedPhoto, matching: .images) {
                                 Label("Change Photo", systemImage: "camera.fill")
                                     .font(.subheadline)
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [.blue, .purple],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                                    .foregroundStyle(GradientCache.bluePurpleHorizontal)
                             }
                         }
                         Spacer()

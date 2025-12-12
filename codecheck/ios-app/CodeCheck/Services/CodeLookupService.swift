@@ -5,6 +5,9 @@ class CodeLookupService {
     private let baseURL: String
     private let authService: AuthService?
 
+    /// Retry configuration for network requests
+    private let retryConfig = RetryHandler.Configuration.default
+
     init(authService: AuthService? = nil) {
         // Use the same base URL configuration as AuthService
         let useCustomServer = UserDefaults.standard.bool(forKey: "useCustomServer")
@@ -23,6 +26,65 @@ class CodeLookupService {
         }
 
         self.authService = authService
+    }
+
+    // MARK: - Network Execution with Deduplication and Retry
+
+    /// Execute a network request with deduplication and automatic retry
+    /// - Parameters:
+    ///   - request: The URLRequest to execute
+    ///   - useRetry: Whether to use retry logic (default: true)
+    ///   - useDedup: Whether to use request deduplication (default: true)
+    /// - Returns: The response data and HTTP response
+    private func executeRequest(
+        _ request: URLRequest,
+        useRetry: Bool = true,
+        useDedup: Bool = true
+    ) async throws -> (Data, HTTPURLResponse) {
+        if useRetry && useDedup {
+            // Use both deduplication and retry
+            return try await RetryHandler.execute(with: retryConfig) {
+                let data = try await RequestDeduplicator.shared.execute(
+                    request: request,
+                    using: NetworkManager.shared.session
+                )
+                // Create synthetic response for deduplicated requests
+                let response = HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+                return (data, response)
+            }
+        } else if useRetry {
+            // Retry only
+            return try await RetryHandler.executeRequest(
+                request,
+                using: NetworkManager.shared.session,
+                config: retryConfig
+            )
+        } else if useDedup {
+            // Deduplication only
+            let data = try await RequestDeduplicator.shared.execute(
+                request: request,
+                using: NetworkManager.shared.session
+            )
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (data, response)
+        } else {
+            // Neither - standard request
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw APIError.invalidResponse
+            }
+            return (data, httpResponse)
+        }
     }
 
     // MARK: - Authentication
@@ -65,12 +127,8 @@ class CodeLookupService {
             return result.jurisdictions
         }
 
-        // Cache miss - fetch from network
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Cache miss - fetch with deduplication and retry
+        let (data, httpResponse) = try await executeRequest(request)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -113,12 +171,8 @@ class CodeLookupService {
             return try decoder.decode(ComplianceResponse.self, from: cachedData)
         }
 
-        // Cache miss - fetch from network
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Cache miss - fetch with deduplication and retry
+        let (data, httpResponse) = try await executeRequest(request)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -155,11 +209,8 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Rule explanations use retry but not deduplication (unique content)
+        let (data, httpResponse) = try await executeRequest(request, useDedup: false)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -193,11 +244,8 @@ class CodeLookupService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(conversationRequest)
 
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Conversations use retry but not deduplication (unique responses expected)
+        let (data, httpResponse) = try await executeRequest(request, useDedup: false)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -216,14 +264,18 @@ class CodeLookupService {
         let endpoint = "\(baseURL)/"
 
         let request = URLRequest(url: URL(string: endpoint)!)
-        let (_, response) = try await NetworkManager.shared.session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        // Health checks use retry with conservative config
+        do {
+            let (_, httpResponse) = try await executeRequest(
+                request,
+                useRetry: true,
+                useDedup: true
+            )
+            return (200...299).contains(httpResponse.statusCode)
+        } catch {
             return false
         }
-
-        return true
     }
 
     // MARK: - On-Demand Code Loading
@@ -244,12 +296,8 @@ class CodeLookupService {
             return try decoder.decode(JurisdictionStatus.self, from: cachedData)
         }
 
-        // Cache miss - fetch from network
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Cache miss - fetch with deduplication and retry
+        let (data, httpResponse) = try await executeRequest(request)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -277,11 +325,8 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Code loading triggers use retry but not deduplication (side effects)
+        let (data, httpResponse) = try await executeRequest(request, useDedup: false)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized
@@ -306,11 +351,8 @@ class CodeLookupService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         try await addAuthHeader(to: &request)
 
-        let (data, response) = try await NetworkManager.shared.session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
+        // Job progress uses both deduplication and retry
+        let (data, httpResponse) = try await executeRequest(request)
 
         if httpResponse.statusCode == 401 {
             throw APIError.unauthorized

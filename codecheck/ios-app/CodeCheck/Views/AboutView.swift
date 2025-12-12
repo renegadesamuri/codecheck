@@ -8,13 +8,7 @@ struct AboutView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 80))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue, .purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(GradientCache.bluePurple)
 
                     Text("CodeCheck")
                         .font(.system(size: 36, weight: .bold))
@@ -124,13 +118,7 @@ struct FeatureHighlight: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(GradientCache.bluePurple)
                 .frame(width: 30)
 
             VStack(alignment: .leading, spacing: 4) {

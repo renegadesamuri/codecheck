@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 
+@MainActor
 class LocationService: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
 
@@ -56,33 +57,40 @@ class LocationService: NSObject, ObservableObject {
 
 // MARK: - CLLocationManagerDelegate
 extension LocationService: CLLocationManagerDelegate {
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        currentLocation = location
-
-        if let continuation = locationContinuation {
-            continuation.resume(returning: location)
-            locationContinuation = nil
+        
+        Task { @MainActor in
+            currentLocation = location
+            
+            if let continuation = locationContinuation {
+                continuation.resume(returning: location)
+                locationContinuation = nil
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        self.error = .locationFailed(error)
-
-        if let continuation = locationContinuation {
-            continuation.resume(throwing: LocationError.locationFailed(error))
-            locationContinuation = nil
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.error = .locationFailed(error)
+            
+            if let continuation = locationContinuation {
+                continuation.resume(throwing: LocationError.locationFailed(error))
+                locationContinuation = nil
+            }
         }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
-
-        switch authorizationStatus {
-        case .restricted, .denied:
-            error = .permissionDenied
-        default:
-            error = nil
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            authorizationStatus = manager.authorizationStatus
+            
+            switch authorizationStatus {
+            case .restricted, .denied:
+                error = .permissionDenied
+            default:
+                error = nil
+            }
         }
     }
 }

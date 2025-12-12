@@ -31,9 +31,18 @@ struct CodeCheckApp: App {
                 }
             }
             .task {
-                // Check auth asynchronously after view appears
+                // Run startup tasks asynchronously after view appears
                 // This happens off the main launch path
+
+                // Check auth status
                 await authService.checkAuthStatus()
+
+                // Migrate data from UserDefaults to Core Data if needed
+                await DataMigrator.migrateIfNeeded()
+
+                // Clean up orphaned images (images not linked to any project)
+                let validImageIds = CoreDataManager.shared.getAllPhotoImageIds()
+                await ImageStorageManager.shared.cleanupOrphanedImages(validIds: Set(validImageIds))
             }
         }
     }

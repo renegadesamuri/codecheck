@@ -1,5 +1,7 @@
 import SwiftUI
 
+import SwiftUI
+
 struct AuthView: View {
     @EnvironmentObject var authService: AuthService
     @State private var showingLogin = true
@@ -9,12 +11,8 @@ struct AuthView: View {
     var body: some View {
         ZStack {
             // Background gradient
-            LinearGradient(
-                colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            GradientCache.backgroundSubtle
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 32) {
@@ -25,23 +23,11 @@ struct AuthView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "checkmark.shield.fill")
                             .font(.system(size: 80))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundStyle(GradientCache.bluePurple)
 
                         Text("CodeCheck")
                             .font(.system(size: 42, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .foregroundStyle(GradientCache.bluePurpleHorizontal)
 
                         Text("Construction Compliance Assistant")
                             .font(.title3)
@@ -158,7 +144,8 @@ struct AuthView: View {
             .scrollDismissesKeyboard(.interactively)
             .sheet(isPresented: $showingDebugSettings) {
                 ServerSettingsView()
-                    .presentationDetents([.medium])
+                    .environmentObject(authService)
+                    .presentationDetents([.medium, .large] as Set<PresentationDetent>)
             }
 
             // Loading overlay

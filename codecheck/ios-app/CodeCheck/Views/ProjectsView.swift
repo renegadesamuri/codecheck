@@ -1,5 +1,7 @@
 import SwiftUI
 
+import SwiftUI
+
 struct ProjectsView: View {
     @EnvironmentObject var projectManager: ProjectManager
     @State private var showingNewProject = false
@@ -66,13 +68,7 @@ struct EmptyProjectsView: View {
         VStack(spacing: 20) {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 80))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(GradientCache.bluePurple)
 
             Text("No Projects Yet")
                 .font(.title2)
@@ -89,13 +85,7 @@ struct EmptyProjectsView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .padding()
-                    .background(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .background(GradientCache.bluePurpleHorizontal)
                     .cornerRadius(12)
             }
         }

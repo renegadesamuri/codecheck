@@ -26,6 +26,7 @@ struct LoginView: View {
                     Image(systemName: "envelope.fill")
                         .foregroundColor(.secondary)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
 
                     TextField("your.email@example.com", text: $email)
                         .textContentType(.emailAddress)
@@ -35,6 +36,9 @@ struct LoginView: View {
                         .onChange(of: email) { _, _ in
                             validateEmail()
                         }
+                        .accessibilityLabel("Email")
+                        .accessibilityHint("Enter your email address")
+                        .accessibilityValue(email.isEmpty ? "Empty" : email)
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -43,6 +47,8 @@ struct LoginView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(emailError != nil ? Color.red : Color.clear, lineWidth: 1)
                 )
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(emailError != nil ? .isSelected : [])
 
                 if let emailError = emailError {
                     HStack(spacing: 4) {
@@ -68,6 +74,7 @@ struct LoginView: View {
                     Image(systemName: "lock.fill")
                         .foregroundColor(.secondary)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
 
                     if showPassword {
                         TextField("Enter your password", text: $password)
@@ -76,6 +83,8 @@ struct LoginView: View {
                             .onChange(of: password) { _, _ in
                                 validatePassword()
                             }
+                            .accessibilityLabel("Password")
+                            .accessibilityHint("Enter your password. Currently visible as plain text.")
                     } else {
                         SecureField("Enter your password", text: $password)
                             .textContentType(.password)
@@ -83,6 +92,8 @@ struct LoginView: View {
                             .onChange(of: password) { _, _ in
                                 validatePassword()
                             }
+                            .accessibilityLabel("Password")
+                            .accessibilityHint("Enter your password. Currently hidden.")
                     }
 
                     Button {
@@ -91,6 +102,8 @@ struct LoginView: View {
                         Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
                             .foregroundColor(.secondary)
                     }
+                    .accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                    .accessibilityHint("Toggles password visibility")
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -99,6 +112,8 @@ struct LoginView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(passwordError != nil ? Color.red : Color.clear, lineWidth: 1)
                 )
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(passwordError != nil ? .isSelected : [])
 
                 if let passwordError = passwordError {
                     HStack(spacing: 4) {
@@ -119,16 +134,12 @@ struct LoginView: View {
             } label: {
                 Text("Forgot Password?")
                     .font(.subheadline)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .purple],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .foregroundStyle(GradientCache.bluePurpleHorizontal)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.horizontal)
+            .accessibilityLabel("Forgot Password")
+            .accessibilityHint("Opens password recovery")
 
             // Login Button
             Button {
@@ -137,20 +148,24 @@ struct LoginView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Text("Sign In")
-                        .font(.headline)
+                    if authService.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.9)
+                    } else {
+                        Text("Sign In")
+                            .font(.headline)
 
-                    Image(systemName: "arrow.right")
+                        Image(systemName: "arrow.right")
+                    }
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding()
+                .frame(height: 50)
                 .background(
-                    LinearGradient(
-                        colors: isFormValid() ? [.blue, .purple] : [.gray],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                    isFormValid() 
+                        ? GradientCache.bluePurpleHorizontal 
+                        : GradientCache.grayDisabled
                 )
                 .cornerRadius(16)
                 .shadow(color: isFormValid() ? .blue.opacity(0.3) : .clear, radius: 10, x: 0, y: 5)
@@ -158,6 +173,30 @@ struct LoginView: View {
             .disabled(!isFormValid() || authService.isLoading)
             .padding(.horizontal)
             .padding(.top, 8)
+            .accessibilityLabel(authService.isLoading ? "Signing in" : "Sign In")
+            .accessibilityHint(isFormValid() ? "Submits your login credentials" : "Please complete the form to sign in")
+            .accessibilityAddTraits(authService.isLoading ? .updatesFrequently : [])
+
+            // Error Message Display
+            if let errorMessage = authService.errorMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .accessibilityHidden(true)
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .multilineTextAlignment(.leading)
+                }
+                .foregroundColor(.red)
+                .padding()
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(12)
+                .padding(.horizontal)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Error: \(errorMessage)")
+                .accessibilityAddTraits(.isStaticText)
+            }
 
             // Demo Mode Button
             Button {
@@ -168,15 +207,24 @@ struct LoginView: View {
                     .foregroundColor(.secondary)
             }
             .padding(.top, 8)
+            .accessibilityLabel("Demo Mode")
+            .accessibilityHint("Skip login and use the app in demo mode")
         }
         .animation(.easeInOut(duration: 0.2), value: emailError)
         .animation(.easeInOut(duration: 0.2), value: passwordError)
+        .animation(.easeInOut(duration: 0.2), value: authService.isLoading)
+        .animation(.easeInOut(duration: 0.2), value: authService.errorMessage)
     }
 
     // MARK: - Validation
 
     private func validateEmail() {
         emailError = nil
+        
+        // Clear auth error when user starts typing
+        if authService.errorMessage != nil {
+            authService.errorMessage = nil
+        }
 
         guard !email.isEmpty else {
             return
@@ -192,6 +240,11 @@ struct LoginView: View {
 
     private func validatePassword() {
         passwordError = nil
+        
+        // Clear auth error when user starts typing
+        if authService.errorMessage != nil {
+            authService.errorMessage = nil
+        }
 
         guard !password.isEmpty else {
             return

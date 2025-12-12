@@ -201,11 +201,7 @@ struct RegisterView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: acceptedTerms ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(
-                            acceptedTerms ?
-                            LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            LinearGradient(colors: [.gray], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
+                        .foregroundStyle(acceptedTerms ? GradientCache.bluePurple : GradientCache.grayDisabled)
                         .font(.title3)
 
                     Text("I agree to the Terms and Conditions")
@@ -231,13 +227,7 @@ struct RegisterView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(
-                    LinearGradient(
-                        colors: isFormValid() ? [.blue, .purple] : [.gray],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .background(GradientCache.buttonGradient(enabled: isFormValid()))
                 .cornerRadius(16)
                 .shadow(color: isFormValid() ? .blue.opacity(0.3) : .clear, radius: 10, x: 0, y: 5)
             }

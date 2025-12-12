@@ -79,13 +79,7 @@ struct ConversationView: View {
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: messageText.isEmpty ? [.gray] : [.blue, .purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(messageText.isEmpty ? GradientCache.grayDisabled : GradientCache.bluePurple)
                 }
                 .disabled(messageText.isEmpty || isLoading)
             }
@@ -138,10 +132,7 @@ struct MessageBubble: View {
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 Text(message.content)
                     .padding(12)
-                    .background(message.role == .user ?
-                        LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                        LinearGradient(colors: [Color(.systemGray5)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
+                    .background(GradientCache.selectionGradient(selected: message.role == .user))
                     .foregroundColor(message.role == .user ? .white : .primary)
                     .cornerRadius(16)
 

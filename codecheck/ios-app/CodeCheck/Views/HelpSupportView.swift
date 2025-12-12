@@ -109,13 +109,7 @@ struct HelpSupportView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.shield.fill")
                             .font(.system(size: 50))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundStyle(GradientCache.bluePurple)
 
                         Text("Need more help?")
                             .font(.headline)
@@ -143,13 +137,7 @@ struct HelpRow: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .foregroundStyle(GradientCache.bluePurple)
                 .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {

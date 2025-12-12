@@ -58,10 +58,13 @@ class NetworkCache {
         // Check memory cache first (fastest)
         if let cached = memoryCache.object(forKey: key as NSString) {
             if cached.isValid {
+                // Record cache hit
+                Task { await MetricsService.shared.recordCacheHit() }
                 return cached.data
             } else {
                 // Expired, remove from memory cache
                 memoryCache.removeObject(forKey: key as NSString)
+                Task { await MetricsService.shared.recordCacheEviction() }
             }
         }
 
@@ -69,9 +72,13 @@ class NetworkCache {
         if let cached = loadFromDisk(key: key), cached.isValid {
             // Promote to memory cache for faster future access
             memoryCache.setObject(cached, forKey: key as NSString, cost: cached.data.count)
+            // Record cache hit (from disk)
+            Task { await MetricsService.shared.recordCacheHit() }
             return cached.data
         }
 
+        // Record cache miss
+        Task { await MetricsService.shared.recordCacheMiss() }
         return nil
     }
 

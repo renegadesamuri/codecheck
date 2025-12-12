@@ -1,4 +1,4 @@
-import Foundation
+ import Foundation
 import PDFKit
 import UIKit
 
@@ -301,4 +301,4 @@ class ReportGenerator {
             }
         }
     }
-}
+

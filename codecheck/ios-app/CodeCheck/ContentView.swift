@@ -75,13 +75,7 @@ struct ProfileView: View {
                 Section {
                     HStack(spacing: 16) {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(GradientCache.bluePurple)
                             .frame(width: 60, height: 60)
                             .overlay(
                                 Text((authService.currentUser?.name?.prefix(1) ?? authService.currentUser?.email.prefix(1) ?? "U").uppercased())

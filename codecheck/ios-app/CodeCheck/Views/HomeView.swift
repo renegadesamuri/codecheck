@@ -15,13 +15,7 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("CodeCheck")
                             .font(.system(size: 36, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .foregroundStyle(GradientCache.bluePurpleHorizontal)
 
                         Text("Construction Compliance Assistant")
                             .font(.title3)
@@ -40,7 +34,7 @@ struct HomeView: View {
                             QuickActionCard(
                                 title: "Quick Measure",
                                 icon: "ruler",
-                                gradient: LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                gradient: GradientCache.blueCyan
                             ) {
                                 showingMeasurement = true
                             }
@@ -48,7 +42,7 @@ struct HomeView: View {
                             QuickActionCard(
                                 title: "AI Assistant",
                                 icon: "bubble.left.and.bubble.right.fill",
-                                gradient: LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                gradient: GradientCache.purplePink
                             ) {
                                 showingConversation = true
                             }
@@ -56,7 +50,7 @@ struct HomeView: View {
                             QuickActionCard(
                                 title: "My Projects",
                                 icon: "folder.fill",
-                                gradient: LinearGradient(colors: [.green, .mint], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                gradient: GradientCache.greenMint
                             ) {
                                 // Navigate to projects tab
                             }
@@ -64,7 +58,7 @@ struct HomeView: View {
                             QuickActionCard(
                                 title: "Find Codes",
                                 icon: "magnifyingglass",
-                                gradient: LinearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                gradient: GradientCache.orangeYellow
                             ) {
                                 // Find building codes
                             }
@@ -183,7 +177,7 @@ struct FeatureRow: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .foregroundStyle(GradientCache.bluePurple)
                 .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {
