@@ -153,15 +153,31 @@ app.include_router(connectivity_router)
 
 # Database connection
 def get_db_connection():
-    """Get database connection"""
+    """Get database connection - supports DATABASE_URL or individual env vars"""
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', ''),
-            database=os.getenv('DB_NAME', 'codecheck')
-        )
+        database_url = os.getenv('DATABASE_URL')
+
+        if database_url:
+            # Parse DATABASE_URL (common in Render/Heroku)
+            from urllib.parse import urlparse
+            parsed = urlparse(database_url.strip())
+            conn = psycopg2.connect(
+                host=parsed.hostname or 'localhost',
+                port=parsed.port or 5432,
+                user=parsed.username or 'postgres',
+                password=parsed.password or '',
+                database=parsed.path.lstrip('/') or 'codecheck',
+                sslmode='require'  # Required for Render PostgreSQL
+            )
+        else:
+            # Fall back to individual environment variables
+            conn = psycopg2.connect(
+                host=os.getenv('DB_HOST', 'localhost'),
+                port=os.getenv('DB_PORT', '5432'),
+                user=os.getenv('DB_USER', 'postgres'),
+                password=os.getenv('DB_PASSWORD', ''),
+                database=os.getenv('DB_NAME', 'codecheck')
+            )
         return conn
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
@@ -299,8 +315,13 @@ def get_user_by_id(conn, user_id: str) -> Optional[Dict]:
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint"""
     return {"message": "CodeCheck API is running", "version": "1.0.0"}
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for container orchestration"""
+    return {"status": "healthy", "version": "1.0.0"}
 
 # ========== Authentication Endpoints ==========
 
